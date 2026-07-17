@@ -1,3 +1,3 @@
-# Eduardo's Utilities - EdUt
+# edut
 
 
