@@ -114,20 +114,45 @@ int l_setup(lua_State *L) {
   return 0;
 }
 
+// Reports and error message. Does NOT terminate the program.
+void report_error(const char *msg) {
+  printf("\033[31m");
+  printf("ERROR: %s", msg);
+  printf("\033[m\n");
+}
+
+// Reports an error message and terminates the program.
+void throw_error(const char *msg) {
+  report_error(msg);
+  exit(EXIT_FAILURE);
+}
+
+// Implementation of the framework's function 'report'.
+//
+// Reports an specified error message, but differently
+// from 'err', does not terminate the program.
+int l_report(lua_State *L) {
+  const char *msg = luaL_checkstring(L, 1);
+  report_error(msg);
+  return 0;
+}
+
 // Implementation of the framework's function 'err'.
 //
 // Reports an error message and terminates the program.
+//
+// Already releases all resources within the Lua State.
 int l_err(lua_State *L) {
-  const char *text = luaL_checkstring(L, 1); 
-  printf("\033[31m");
-  printf("ERROR: %s", text);
-  printf("\033[m\n");
-  exit(EXIT_FAILURE);  return 0;
+  const char *msg = luaL_checkstring(L, 1);
+  report_error(msg);
+  lua_close(L);
+  exit(EXIT_FAILURE);
 }
 
 static const struct luaL_Reg edut_api [] = {
-    {"setup", l_setup},
-    {"err", l_err},
+    { "setup", l_setup },
+    { "report", l_report },
+    { "err", l_err },
     {NULL, NULL} 
 };
 
@@ -206,19 +231,20 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
 
   if(argc == 1) {
-    puts("ERROR: Nothing passed to the program at all.");
-    return EXIT_FAILURE;
+    lua_close(L);
+    throw_error("No argument passed to the program.");
   }
 
   parsed_input_t *parsed_input = parse_input(argv + 1, argc - 1);
 
   if(parsed_input == NULL) {
-    puts("ERROR: Error when parsing the input.");
-    return EXIT_FAILURE;
+    lua_close(L);
+    throw_error("Error when parsing the input.");
   }
 
   command_execute(L, parsed_input);
   
+  lua_close(L);
   free_parsed_input(parsed_input);
   return EXIT_SUCCESS;
 }
