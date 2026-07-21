@@ -10,6 +10,12 @@
 
 #include "command.h"
 
+// Stores the information of a specific command.
+//
+// The 'idx' parameter specifies what's the command - within the
+// 'commands' table - that's going to be registered.
+//
+// The 'commands' table must be ALREADY in the stack.
 void register_command(lua_State *L, command_t *commands, int idx) {
   int stack = lua_gettop(L);
 
@@ -55,7 +61,7 @@ void register_command(lua_State *L, command_t *commands, int idx) {
       commands[idx].flags_amount++;
       lua_pop(L, 1);
     }
- }
+  }
   lua_pop(L, 1);
 
   commands[idx].subcommands_amount = 0;
@@ -85,6 +91,9 @@ void register_command(lua_State *L, command_t *commands, int idx) {
   lua_settop(L, stack);
 }
 
+// Implementation of the framework's function 'setup'.
+//
+// Registers all the user-configuration
 int l_setup(lua_State *L) {
   luaL_checktype(L, 1, LUA_TTABLE);
 
@@ -105,6 +114,9 @@ int l_setup(lua_State *L) {
   return 0;
 }
 
+// Implementation of the framework's function 'err'.
+//
+// Reports an error message and terminates the program.
 int l_err(lua_State *L) {
   const char *text = luaL_checkstring(L, 1); 
   printf("\033[31m");
@@ -119,11 +131,11 @@ static const struct luaL_Reg edut_api [] = {
     {NULL, NULL} 
 };
 
-// Returns 0 if (and only if) the file could be found
+// Returns 0 if (and only if) the file could be found.
 //
-// @param file_path Out parameter to store the config
-//                  file's complete path
-int get_user_lua_configs(char *file_path) {
+// The out parameter 'filepath_out' will store the
+// config file's path if the file is found.
+int get_user_lua_configs(char *filepath_out) {
   char *home_folder;
   char *xdg_env = getenv("XDG_CONFIG_HOME");
   char config_folder[PATH_MAX];
@@ -138,10 +150,13 @@ int get_user_lua_configs(char *file_path) {
   } else
     snprintf(config_folder, PATH_MAX, "%s", xdg_env);
   
-  snprintf(file_path, PATH_MAX, "%s/edut", config_folder);
+  snprintf(filepath_out, PATH_MAX, "%s/edut", config_folder);
   return 0;
 }
 
+// Implementation of 'require("edut")'
+//
+// Returns the defined API
 int lua_require_api(lua_State *L) {
   luaL_newlib(L, edut_api);
   return 1;

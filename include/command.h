@@ -11,9 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_FLAGS 20       // REMOVER!!
-#define MAX_SUBCOMMANDS 10 // REMOVER!!
-#define MAX_ARGUMENTS 10   // REMOVER!!
+#define MAX_FLAGS 20     
+#define MAX_SUBCOMMANDS 10
+#define MAX_ARGUMENTS 10   
 
 #define MAX_COMMAND_NAME 20
 #define MAX_FLAG_NAME 20
@@ -38,8 +38,8 @@ typedef struct parsed_input {
   size_t flags_amount;
   char *flags_arguments[MAX_FLAGS][MAX_ARGUMENTS];
   size_t flags_arguments_amount[MAX_FLAGS];
-  char *direct_arguments[MAX_ARGUMENTS]; // argumentos passados diretamente para
-                                         // o subcomando e não uma flag
+  char *direct_arguments[MAX_ARGUMENTS]; // Arguments passed directly to the subcommand
+                                         // and not to any flag
   size_t direct_arguments_amount;
   struct parsed_input *for_subcommand;
 } parsed_input_t;

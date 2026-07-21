@@ -5,6 +5,7 @@ command_t *commands;
 
 // Helper functions
 
+// Searches for a command with a specific name.
 command_t *command_withname(const char *name) {
   for(size_t i = 0; i < registered_commands_amount; i++)
     if(strcmp(commands[i].name, name) == 0)
@@ -13,6 +14,10 @@ command_t *command_withname(const char *name) {
   return NULL;
 }
 
+// Searches for a subcommand of a specific command.
+//
+// Returns NULL if the command does not contain a subcommand
+// with the specified name.
 command_t *get_subcommand_of(command_t command, const char *name) {
   for(size_t i = 0; i < command.subcommands_amount; i++)
     if(strcmp(command.sub_commands[i].name, name) == 0)
@@ -21,6 +26,13 @@ command_t *get_subcommand_of(command_t command, const char *name) {
   return NULL;
 }
 
+// Searches for a flag of a specific command.
+//
+// The index of the found flag is returned with the 'out_idx' out
+// parameter.
+//
+// Returns `true` if the command contains the specified flag,
+// `false` otherwise.
 bool find_flag(command_t command, const char *name, size_t *out_idx) {
   for(size_t i = 0; i < command.flags_amount; i++)
     if(strcmp(command.flags[i].text, name) == 0) {
@@ -33,6 +45,9 @@ bool find_flag(command_t command, const char *name, size_t *out_idx) {
 
 // Header defined functions
 
+// Executes a command with the specified parsed_input.
+//
+// The execution function must ALREADY be in the lua stack.
 void command_execute(lua_State *L, parsed_input_t *parsed_input) { 
   if(parsed_input != NULL) { 
     lua_rawgeti(L, LUA_REGISTRYINDEX, parsed_input->command->execute_ref);
@@ -48,6 +63,7 @@ void command_execute(lua_State *L, parsed_input_t *parsed_input) {
   }
 }
 
+// Pushes a command into the lua stack.
 void push_lua_command(lua_State *L, command_t *command) {
   lua_newtable(L);
 
@@ -60,6 +76,12 @@ void push_lua_command(lua_State *L, command_t *command) {
   lua_setfield(L, -2, "get_name");
 }
 
+// Implementation of the framework's 'execute' function.
+// It executes the user-implemented execution function for
+// a command.
+//
+// The command being executed must ALREADY be in the lua
+// stack.
 int l_command_execute(lua_State *L) {
   command_t *command =
     (command_t*)lua_touserdata(L, lua_upvalueindex(1));
@@ -70,6 +92,7 @@ int l_command_execute(lua_State *L) {
   return 0;
 }
 
+// Implementation of the framework's 'get_name' function
 int l_command_getname(lua_State *L) {
   command_t *command =
     (command_t*)lua_touserdata(L, lua_upvalueindex(1));
@@ -86,6 +109,8 @@ void free_parsed_input(parsed_input_t *parsed_input) {
   }
 }
 
+// Parses the user input
+//
 // Returns NULL for parsing errors
 parsed_input_t *parse_input(char **args, int n) {
   parsed_input_t *parsed_input =
@@ -175,6 +200,7 @@ parsed_input_t *parse_input(char **args, int n) {
   return parsed_input;
 }
 
+// Pushes a parsed_input to the lua stack
 void push_lua_parsedinput(lua_State *L, parsed_input_t *parsed_input) {
   lua_newtable(L); 
   
@@ -195,6 +221,8 @@ void push_lua_parsedinput(lua_State *L, parsed_input_t *parsed_input) {
   lua_setfield(L, -2, "get_argument");
 }
 
+// Implementation of the framework's 'get_subcommand' function.
+// It returns the command's subcommand.
 int l_parsedinput_getsubcommand(lua_State *L) {
   parsed_input_t *parsed_input =
     (parsed_input_t*)lua_touserdata(L, lua_upvalueindex(1));
@@ -211,6 +239,8 @@ int l_parsedinput_getsubcommand(lua_State *L) {
   return 1;
 }
 
+// Implementation of the framework's 'for_subcommand' function.
+// It returns the parsed_input passed to the command's subcommand.
 int l_parsedinput_forsubcommand(lua_State *L) {
   parsed_input_t *parsed_input =
     (parsed_input_t*)lua_touserdata(L, lua_upvalueindex(1));
@@ -224,6 +254,8 @@ int l_parsedinput_forsubcommand(lua_State *L) {
   return 1;
 }
 
+// Implementation of the framework's 'contains_flag' function.
+// It returns whether a flag exists within the parsed_input.
 int l_parsedinput_containsflag(lua_State *L) {
   parsed_input_t *parsed_input =
     (parsed_input_t*)lua_touserdata(L, lua_upvalueindex(1));
@@ -241,6 +273,8 @@ int l_parsedinput_containsflag(lua_State *L) {
   return 1;
 }
 
+// Implementation of the framework's 'get_argument' function.
+// It returns an argument, specified by index, in the parsed_input.
 int l_parsedinput_getargument(lua_State *L) {
   parsed_input_t *parsed_input =
     (parsed_input_t*)lua_touserdata(L, lua_upvalueindex(1));
