@@ -22,5 +22,5 @@ You can also install the pre-compiled executable in the repository's releases.
 
 ## Collaborating
 
-The framework is simple and certainly need some improvement, so any help for the project will be very well received! It can be with creating a good documentation, adding support to other languages, etc.
+The framework is simple and certainly need some improvement, so any help for the project will be very well received! It can be with creating a good documentation, adding support to other languages, adding support for other operating systems etc.
 
