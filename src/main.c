@@ -200,14 +200,6 @@ lua_State *load_user_configs() {
   return L;
 }
 
-void free_registered_commands(command_t *commands, size_t amount) {
-  for(size_t i = 0; i < amount; i++)
-    if(commands[i].subcommands_amount > 0)
-      free_registered_commands(commands[i].sub_commands, commands[i].subcommands_amount); 
-
-  free(commands);
-}
-
 int main(int argc, char **argv) {
   lua_State *L;
   if((L = load_user_configs()) == NULL) 
@@ -215,7 +207,6 @@ int main(int argc, char **argv) {
 
   if(argc == 1) {
     puts("ERROR: Nothing passed to the program at all.");
-    free_registered_commands(commands, registered_commands_amount);
     return EXIT_FAILURE;
   }
 
@@ -223,14 +214,12 @@ int main(int argc, char **argv) {
 
   if(parsed_input == NULL) {
     puts("ERROR: Error when parsing the input.");
-    free_registered_commands(commands, registered_commands_amount);
     return EXIT_FAILURE;
   }
 
   command_execute(L, parsed_input);
   
   free_parsed_input(parsed_input);
-  free_registered_commands(commands, registered_commands_amount);
   return EXIT_SUCCESS;
 }
 
