@@ -2,6 +2,12 @@
 
 # Script that creates a default Java project
 
+read -p "Enter the project name: " PROJECT_NAME
+
+echo "Creating the project folder..."
+mkdir $PROJECT_NAME
+cd $PROJECT_NAME
+
 echo "Creating a git repository..."
 git init --quiet
 
