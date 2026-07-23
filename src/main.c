@@ -5,6 +5,7 @@
 #include<lauxlib.h>
 #include<lualib.h>
 
+#include "util/arena.h"
 #include "command.h"
 
 // Stores the information of a specific command.
@@ -153,26 +154,33 @@ static const struct luaL_Reg edut_api [] = {
     {NULL, NULL} 
 };
 
-// Returns 0 if (and only if) the file could be found.
+// The parameter 'arena' receives the arena that will
+// be used to allocate the config file's path. 
 //
-// The out parameter 'filepath_out' will store the
-// config file's path if the file is found.
-int get_user_lua_configs(char *filepath_out) {
-  char *home_folder;
-  char *xdg_env = getenv("XDG_CONFIG_HOME");
-  char config_folder[PATH_MAX];
+// Returns the config directory's path if it's found, 
+// NULL otherwise.
+char *get_user_lua_configs(arena_t *arena) {
+  const char *xdg_env = getenv("XDG_CONFIG_HOME");
+  char *configs_path;
 
-  if(xdg_env == NULL || strcmp(xdg_env, "") == 0) {
-    home_folder = getenv("HOME");
+  if(xdg_env != NULL && strcmp(xdg_env, "") != 0) {
+    const char *suffix = "/edut";
+    size_t len = strlen(xdg_env) + strlen(suffix);
+    configs_path = arena_alloc(arena, len + 1, 1);
+    sprintf(configs_path, "%s%s", xdg_env, suffix);
+    return configs_path;
+  }
 
-    if(home_folder == NULL || strcmp(home_folder, "") == 0)
-      return 1;
+  const char *home_folder = getenv("HOME");
 
-    snprintf(config_folder, PATH_MAX, "%s/.config", home_folder);
-  } else
-    snprintf(config_folder, PATH_MAX, "%s", xdg_env);
-  
-  snprintf(filepath_out, PATH_MAX, "%s/edut", config_folder);
+  if(home_folder == NULL || strcmp(home_folder, "") == 0)
+    return NULL;
+
+  const char *suffix = "/.config/edut";
+  size_t len = strlen(home_folder) + strlen(suffix);
+  configs_path = arena_alloc(arena, len + 1, 1);
+  sprintf(configs_path, "%s%s", home_folder, suffix);
+
   return 0;
 }
 
@@ -189,11 +197,12 @@ int lua_require_api(lua_State *L) {
 lua_State *load_user_configs() {
   lua_State *L = luaL_newstate(); 
 
-  char user_configs_folder[PATH_MAX];
-  char init_file_path[PATH_MAX];
-
-  if(get_user_lua_configs(user_configs_folder)) {
-    puts("Couldn't read your config file.");
+  char *user_configs_folder;
+  char *init_file_path;
+  
+  arena_t *arena = arena_new(KB(1));
+  if((user_configs_folder = get_user_lua_configs(arena)) == NULL) {
+    puts("Couldn't find your configs folder.");
     lua_close(L);
     return NULL;
   }
@@ -215,10 +224,15 @@ lua_State *load_user_configs() {
 
   lua_pop(L, 2);
 
-  snprintf(init_file_path, PATH_MAX, "%s/init.lua", user_configs_folder);
+  const char *suffix = "/init.lua";
+  size_t len = strlen(user_configs_folder) + strlen(suffix);
+  init_file_path = arena_alloc(arena, len + 1, 1);
+  sprintf(init_file_path, "%s%s", user_configs_folder, suffix);
+
   if(luaL_dofile(L, init_file_path) != LUA_OK)
     puts(lua_tostring(L, -1));
 
+  arena_destroy(arena);
   return L;
 }
 
