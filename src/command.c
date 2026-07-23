@@ -1,3 +1,7 @@
+#include<string.h>
+#include<stdlib.h>
+#include<lauxlib.h>
+
 #include "command.h"
 
 size_t registered_commands_amount;

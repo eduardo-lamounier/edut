@@ -1,10 +1,7 @@
-#include <linux/limits.h>
 #include<stdio.h>
 #include<assert.h>
-#include<unistd.h>
 #include<stdlib.h>
 #include<string.h>
-#include<lua.h>
 #include<lauxlib.h>
 #include<lualib.h>
 
