@@ -160,8 +160,24 @@ static const struct luaL_Reg edut_api [] = {
 // Returns the config directory's path if it's found, 
 // NULL otherwise.
 char *get_user_lua_configs(arena_t *arena) {
-  const char *xdg_env = getenv("XDG_CONFIG_HOME");
   char *configs_path;
+
+#ifdef _WIN32
+  {
+    const char *applocaldata = getenv("APPLOCALDATA");
+
+    if(applocaldata == NULL || strcmp(applocaldata, "") == 0)
+      return NULL;
+    
+    const char *suffix = "/edut";
+    size_t len = strlen(applocaldata) + strlen(suffix);
+    configs_path = arena_alloc(arena, len + 1, 1);
+    snprintf(configs_path, len + 1, "%s%s", applocaldata, suffix);
+    return configs_path;
+  }
+#endif
+
+  const char *xdg_env = getenv("XDG_CONFIG_HOME");
 
   if(xdg_env != NULL && strcmp(xdg_env, "") != 0) {
     const char *suffix = "/edut";
