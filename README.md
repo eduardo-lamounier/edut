@@ -40,6 +40,15 @@ cp -Recurse config "$env:LOCALAPPDATA\edut"
 
 There you can also make your own changes.
 
+## Built-in options
+
+- `edut --help` or `edut -h`: describe the application and show usage.
+- `edut --version` or `edut -v`: print `edut 1.0.0`.
+
+These options exit successfully without loading Lua configuration, so they also
+work when configuration is missing or invalid. They apply as the first argument;
+flags after a command name are handled by that command's configuration.
+
 ## Flag arguments
 
 Flags declared with values in Lua, such as `["--output-file="] = 1`, accept both

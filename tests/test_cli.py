@@ -79,6 +79,48 @@ class CliTests(unittest.TestCase):
                     self.env["XDG_CONFIG_HOME"] = value
                 self.run_cli("plain")
 
+    def test_builtin_flags_without_configuration(self):
+        for config_state in ("missing", "invalid", "side-effect"):
+            if config_state == "missing":
+                self.config.unlink()
+            elif config_state == "invalid":
+                self.config.write_text("this is invalid Lua")
+            else:
+                self.config.write_text('print("CONFIG_LOADED"); error("must not run")')
+            for option in ("--help", "-h", "--version", "-v"):
+                with self.subTest(config=config_state, option=option):
+                    result = subprocess.run(
+                        [str(EXECUTABLE), option], env=self.env, cwd=self.root,
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(result.stderr, "")
+                    self.assertNotIn("CONFIG_LOADED", result.stdout)
+                    if option in ("--version", "-v"):
+                        self.assertEqual(result.stdout, "edut 1.0.0\n")
+                    else:
+                        self.assertIn("Define and run custom CLI commands", result.stdout)
+                        self.assertIn("Usage: edut", result.stdout)
+                        self.assertIn("Lua", result.stdout)
+                        self.assertIn("-h, --help", result.stdout)
+                        self.assertIn("-v, --version", result.stdout)
+
+    def test_builtin_flags_do_not_override_command_flags(self):
+        self.config.write_text('''
+require "edut".setup {commands = {{"custom",
+  flags = {"--help", "-h", "--version", "-v"},
+  execute = function(input)
+    for _, flag in ipairs({"--help", "-h", "--version", "-v"}) do
+      if input.contains_flag(flag) then print("custom:" .. flag) end
+    end
+    print("EXECUTED")
+  end,
+}}}
+''')
+        for option in ("--help", "-h", "--version", "-v"):
+            with self.subTest(option=option):
+                self.assertIn("custom:" + option, self.run_cli("custom", option))
+
     def test_no_flags_and_positional_limits(self):
         self.run_cli("plain")
         self.run_cli("plain", "value")

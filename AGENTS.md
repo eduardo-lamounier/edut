@@ -21,6 +21,10 @@ script manager built on the framework.
 
 ## Execution and Lua API
 
+Built-in `--help`/`-h` and `--version`/`-v` options are handled before loading Lua
+when passed as the first argument. The version is defined by `EDUT_VERSION` in
+`src/main.c`. Normal command execution follows this flow:
+
 1. C locates and loads the user's `init.lua`, adding the configuration's `lua/`
    directory to Lua's module search path.
 2. Lua calls `require "edut"` and `api.setup { commands = { ... } }`.
