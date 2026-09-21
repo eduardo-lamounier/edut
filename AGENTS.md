@@ -60,8 +60,8 @@ cmake -S . -B build
 cmake --build build
 ```
 
-The executable is generated in `build/`. There is currently no automated test
-suite. For behavior changes, build and exercise relevant commands with an isolated
+The executable is generated in `build/`. Run the Unix CLI regression suite with
+`python3 tests/test_cli.py build/edut`. For behavior changes, build and exercise relevant commands with an isolated
 configuration via `XDG_CONFIG_HOME`; avoid using or modifying personal configs.
 The bundled Java generator creates files in its working directory, so run it only
 in a disposable directory when testing.
@@ -69,19 +69,14 @@ in a disposable directory when testing.
 ## Known limitations
 
 - `scripts run` is implemented; `add`, `rm`, `list`, `show`, and `edit` are stubs.
-- The Unix configuration fallback constructs a path but returns `0`. The Windows
-  loader reads `APPLOCALDATA`, whereas the documented variable is `LOCALAPPDATA`.
-- Command registration does not initialize `flags_amount` when `flags` is absent,
-  and its flag-limit assertion has an off-by-one error.
-- Positional argument storage and retrieval lack bounds checks. Required flag
-  values are not fully validated.
-- Flags match exact tokens: currently `--output-file= file` works with the parser,
-  while `--output-file=file` does not. `contains_flag` checks only one name, despite
-  the bundled help code passing two.
+- `contains_flag` checks only one name, despite the bundled help code passing two.
 - Lua callback errors do not reliably propagate to the process exit status.
   Script command strings lack shell quoting, and pipelines can mask failures.
 - Command-tree allocations are not freed. Some header declarations have no
   implementation, and API documentation is minimal.
+
+See `docs/known-issues.md` for details on remaining problems. Value-taking flags
+accept separate and attached values; Lua lookups use the registered flag name.
 
 ## Working conventions
 
