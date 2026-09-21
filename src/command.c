@@ -47,6 +47,36 @@ bool find_flag(command_t command, const char *name, size_t *out_idx) {
   return false;
 }
 
+// Preserve the registered flag name while accepting an attached first value.
+static bool find_input_flag(command_t command, char *text, size_t *out_idx,
+    char **inline_value) {
+  *inline_value = NULL;
+  if(find_flag(command, text, out_idx)) return true;
+
+  char *equals = strchr(text, '=');
+  if(equals == NULL) return false;
+
+  size_t prefix = (size_t)(equals - text);
+  for(size_t i = 0; i < command.flags_amount; i++) {
+    flag_t *flag = &command.flags[i];
+    size_t len = strlen(flag->text);
+    if(flag->arguments_amount > 0 &&
+        (len == prefix || (len == prefix + 1 && flag->text[prefix] == '=')) &&
+        strncmp(flag->text, text, prefix) == 0) {
+      *out_idx = i;
+      *inline_value = equals + 1;
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool missing_flag_arguments(parsed_input_t *input) {
+  if(input->flags_amount == 0) return false;
+  size_t idx = input->flags_amount - 1;
+  return input->flags_arguments_amount[idx] < input->flags[idx].arguments_amount;
+}
+
 // Header defined functions
 
 // Executes a command with the specified parsed_input.
@@ -141,6 +171,22 @@ parsed_input_t *parse_input(char **args, int n) {
     }
 
     command_t *subcommand = get_subcommand_of(*current->command, args[i]);
+    size_t command_flag_idx;
+    char *inline_value;
+    bool is_flag = find_input_flag(*current->command, args[i],
+      &command_flag_idx, &inline_value);
+
+    if(missing_flag_arguments(current)) {
+      if(subcommand != NULL || is_flag || strncmp(args[i], "--", 2) == 0) {
+        printf("Missing arguments for flag '%s'.\n",
+          current->flags[current->flags_amount - 1].text);
+        free_parsed_input(parsed_input);
+        return NULL;
+      }
+      size_t idx = current->flags_amount - 1;
+      current->flags_arguments[idx][current->flags_arguments_amount[idx]++] = args[i];
+      continue;
+    }
 
     if(subcommand != NULL) {
       current->for_subcommand =
@@ -156,17 +202,18 @@ parsed_input_t *parse_input(char **args, int n) {
       continue;
     }
 
-    size_t command_flag_idx;
-    
-    if(find_flag(*current->command, args[i],&command_flag_idx)) {
-      if(current->flags_amount+1 > MAX_FLAGS || strlen(args[i]) > MAX_FLAG_NAME){
+    if(is_flag) {
+      if(current->flags_amount >= MAX_FLAGS) {
         free_parsed_input(parsed_input);
         return NULL;
       }
       
-      strncpy(current->flags[current->flags_amount].text, args[i], MAX_FLAG_NAME+1);
-      current->flags[current->flags_amount].text[MAX_FLAG_NAME] = '\0';
-      current->flags[current->flags_amount].arguments_amount = current->command->flags[command_flag_idx].arguments_amount;
+      size_t idx = current->flags_amount;
+      current->flags[idx] = current->command->flags[command_flag_idx];
+      if(inline_value != NULL) {
+        current->flags_arguments[idx][0] = inline_value;
+        current->flags_arguments_amount[idx] = 1;
+      }
       current->flags_amount++;
       continue;
     }
@@ -177,26 +224,22 @@ parsed_input_t *parse_input(char **args, int n) {
       return NULL;
     }
 
-    ssize_t curr_flag_idx = current->flags_amount - 1;
-
-    if((current->flags_amount == 0 ||
-      current->flags_arguments_amount[curr_flag_idx]
-        == current->flags[curr_flag_idx].arguments_amount)
-    ) {
-      current->direct_arguments[current->direct_arguments_amount++] = args[i];
-      continue;
-    }
-
-    if(current->flags_arguments_amount[curr_flag_idx]+1 > MAX_ARGUMENTS) {
+    if(current->direct_arguments_amount >= MAX_ARGUMENTS) {
+      printf("Too many positional arguments for command '%s'.\n", current->command->name);
       free_parsed_input(parsed_input);
       return NULL;
     }
-
-    current->flags_arguments[curr_flag_idx][current->flags_arguments_amount[curr_flag_idx]] = args[i];
-    current->flags_arguments_amount[curr_flag_idx]++;
+    current->direct_arguments[current->direct_arguments_amount++] = args[i];
   }
 
   if(parsed_input->command == NULL) {
+    free_parsed_input(parsed_input);
+    return NULL;
+  }
+
+  if(missing_flag_arguments(current)) {
+    printf("Missing arguments for flag '%s'.\n",
+      current->flags[current->flags_amount - 1].text);
     free_parsed_input(parsed_input);
     return NULL;
   }
@@ -284,7 +327,7 @@ int l_parsedinput_getargument(lua_State *L) {
     (parsed_input_t*)lua_touserdata(L, lua_upvalueindex(1));
 
   const char *flag_text;
-  int argument_index;
+  lua_Integer argument_index;
 
   if(lua_type(L, 1) == LUA_TSTRING) {
     flag_text = luaL_checkstring(L, 1);
@@ -297,6 +340,11 @@ int l_parsedinput_getargument(lua_State *L) {
       "\nExpected a string or a number as first parameter.");
 
   if(flag_text == NULL) {
+    if(argument_index < 1 || (lua_Unsigned)argument_index >= MAX_ARGUMENTS + 1 ||
+        (lua_Unsigned)argument_index > parsed_input->direct_arguments_amount) {
+      lua_pushnil(L);
+      return 1;
+    }
     lua_pushstring(L, parsed_input->direct_arguments[argument_index-1]);
     return 1;
   }
@@ -316,7 +364,7 @@ int l_parsedinput_getargument(lua_State *L) {
 
   flag_t *flag = parsed_input->flags + flag_idx;
 
-  if(argument_index < 1 || (size_t)argument_index > flag->arguments_amount) {
+  if(argument_index < 1 || (lua_Unsigned)argument_index > flag->arguments_amount) {
     lua_pushnil(L);
     return 1;
   }
@@ -324,4 +372,3 @@ int l_parsedinput_getargument(lua_State *L) {
   lua_pushstring(L, parsed_input->flags_arguments[flag_idx][argument_index-1]);
   return 1;
 }
-

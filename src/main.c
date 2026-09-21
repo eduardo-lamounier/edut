@@ -16,6 +16,7 @@
 // The 'commands' table must be ALREADY in the stack.
 void register_command(lua_State *L, command_t *commands, int idx) {
   int stack = lua_gettop(L);
+  memset(&commands[idx], 0, sizeof(commands[idx]));
 
   lua_rawgeti(L, -1, idx+1);
 
@@ -30,7 +31,9 @@ void register_command(lua_State *L, command_t *commands, int idx) {
 
     lua_pushnil(L);
     while(lua_next(L, -2) != 0) {
-      assert(commands[idx].flags_amount <= MAX_FLAGS);
+      if(commands[idx].flags_amount >= MAX_FLAGS)
+        luaL_error(L, "Too many flags for command '%s' (maximum %d)",
+          commands[idx].name, MAX_FLAGS);
 
       size_t flag_idx = commands[idx].flags_amount;
 
@@ -44,7 +47,11 @@ void register_command(lua_State *L, command_t *commands, int idx) {
         commands[idx].flags[flag_idx].arguments_amount = 0;
       } else if(lua_isstring(L, -2) && lua_isnumber(L, -1)) {
         flag_text = lua_tostring(L, -2);
-        flag_arguments_amount = lua_tointeger(L, -1);
+        lua_Integer count = luaL_checkinteger(L, -1);
+        if(count < 0 || count > MAX_ARGUMENTS)
+          luaL_error(L, "Flag '%s' must accept between 0 and %d arguments",
+            flag_text, MAX_ARGUMENTS);
+        flag_arguments_amount = (size_t)count;
       } else {
         luaL_error(L, "Expected name of a flag, or name of flag (key) and"
           "then its number of arguments (value)");
@@ -164,7 +171,7 @@ char *get_user_lua_configs(arena_t *arena) {
 
 #ifdef _WIN32
   {
-    const char *applocaldata = getenv("APPLOCALDATA");
+    const char *applocaldata = getenv("LOCALAPPDATA");
 
     if(applocaldata == NULL || strcmp(applocaldata, "") == 0)
       return NULL;
@@ -197,7 +204,7 @@ char *get_user_lua_configs(arena_t *arena) {
   configs_path = arena_alloc(arena, len + 1, 1);
   sprintf(configs_path, "%s%s", home_folder, suffix);
 
-  return 0;
+  return configs_path;
 }
 
 // Implementation of 'require("edut")'
@@ -245,8 +252,12 @@ lua_State *load_user_configs() {
   init_file_path = arena_alloc(arena, len + 1, 1);
   sprintf(init_file_path, "%s%s", user_configs_folder, suffix);
 
-  if(luaL_dofile(L, init_file_path) != LUA_OK)
+  if(luaL_dofile(L, init_file_path) != LUA_OK) {
     puts(lua_tostring(L, -1));
+    arena_destroy(arena);
+    lua_close(L);
+    return NULL;
+  }
 
   arena_destroy(arena);
   return L;
@@ -275,4 +286,3 @@ int main(int argc, char **argv) {
   free_parsed_input(parsed_input);
   return EXIT_SUCCESS;
 }
-
