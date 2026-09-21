@@ -61,6 +61,9 @@ not freed. Calling `setup` repeatedly replaces the global command array without
 releasing prior arrays or their Lua registry references. The temporary path arena
 also leaks on the early configuration-discovery failure path. Define ownership
 and cleanup for successful registration, replacement, and partial failure.
+Failed registration now leaves the previously published command tree unchanged,
+including when Lua catches the failure with `pcall`, but allocations and callback
+references created during the failed attempt still need cleanup.
 
 ### Incomplete public declarations
 

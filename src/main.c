@@ -8,6 +8,12 @@
 #include "util/arena.h"
 #include "command.h"
 
+// A trailing '=' does not distinguish flags when parsing attached values.
+static size_t flag_name_length(const char *name) {
+  size_t len = strlen(name);
+  return len > 0 && name[len - 1] == '=' ? len - 1 : len;
+}
+
 // Stores the information of a specific command.
 //
 // The 'idx' parameter specifies what's the command - within the
@@ -27,8 +33,6 @@ void register_command(lua_State *L, command_t *commands, int idx) {
 
   lua_getfield(L, -1, "flags");
   if(!lua_isnil(L, -1) && lua_istable(L, -1)) {
-    commands[idx].flags_amount = 0;
-
     lua_pushnil(L);
     while(lua_next(L, -2) != 0) {
       if(commands[idx].flags_amount >= MAX_FLAGS)
@@ -43,12 +47,10 @@ void register_command(lua_State *L, command_t *commands, int idx) {
       if(lua_isnumber(L, -2) && lua_isstring(L, -1)) {
         flag_text = lua_tostring(L, -1);
         flag_arguments_amount = 0;
-
-        commands[idx].flags[flag_idx].arguments_amount = 0;
       } else if(lua_isstring(L, -2) && lua_isnumber(L, -1)) {
         flag_text = lua_tostring(L, -2);
         lua_Integer count = luaL_checkinteger(L, -1);
-        if(count < 0 || count > MAX_ARGUMENTS)
+        if(count < 0 || count > MAX_ARGUMENTS || count != lua_tonumber(L, -1))
           luaL_error(L, "Flag '%s' must accept between 0 and %d arguments",
             flag_text, MAX_ARGUMENTS);
         flag_arguments_amount = (size_t)count;
@@ -61,6 +63,14 @@ void register_command(lua_State *L, command_t *commands, int idx) {
       strncpy(commands[idx].flags[flag_idx].text, flag_text, MAX_FLAG_NAME+1);
       commands[idx].flags[flag_idx].text[MAX_FLAG_NAME] = '\0';
 
+      const char *name = commands[idx].flags[flag_idx].text;
+      size_t name_len = flag_name_length(name);
+      for(size_t i = 0; i < flag_idx; i++) {
+        const char *other = commands[idx].flags[i].text;
+        if(name_len == flag_name_length(other) && strncmp(name, other, name_len) == 0)
+          luaL_error(L, "Ambiguous flag names '%s' and '%s'", name, other);
+      }
+
       commands[idx].flags[flag_idx].arguments_amount = flag_arguments_amount;
 
       commands[idx].flags_amount++;
@@ -68,8 +78,6 @@ void register_command(lua_State *L, command_t *commands, int idx) {
     }
   }
   lua_pop(L, 1);
-
-  commands[idx].subcommands_amount = 0;
 
   lua_getfield(L, -1, "subcommands");
   if(!lua_isnil(L, -1) && lua_istable(L, -1)) {
@@ -108,13 +116,19 @@ int l_setup(lua_State *L) {
     return 0;
 
   lua_len(L, -1);
-  registered_commands_amount = lua_tointeger(L, -1);
+  size_t new_commands_amount = lua_tointeger(L, -1);
   lua_pop(L, 1);
 
-  commands = malloc(sizeof(command_t) * registered_commands_amount);
+  command_t *new_commands = malloc(sizeof(command_t) * new_commands_amount);
+  if(new_commands == NULL && new_commands_amount != 0)
+    return luaL_error(L, "Could not allocate commands");
 
-  for(size_t i = 0; i < registered_commands_amount; i++)
-    register_command(L, commands, i);
+  for(size_t i = 0; i < new_commands_amount; i++)
+    register_command(L, new_commands, i);
+
+  // Lua may catch registration errors with pcall. Publish only complete trees.
+  commands = new_commands;
+  registered_commands_amount = new_commands_amount;
 
   return 0;
 }

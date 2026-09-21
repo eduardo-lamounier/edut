@@ -340,7 +340,7 @@ int l_parsedinput_getargument(lua_State *L) {
       "\nExpected a string or a number as first parameter.");
 
   if(flag_text == NULL) {
-    if(argument_index < 1 || (lua_Unsigned)argument_index >= MAX_ARGUMENTS + 1 ||
+    if(argument_index < 1 ||
         (lua_Unsigned)argument_index > parsed_input->direct_arguments_amount) {
       lua_pushnil(L);
       return 1;

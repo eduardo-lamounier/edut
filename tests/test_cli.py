@@ -136,6 +136,50 @@ require "edut".setup {commands = {{"limit", flags = {["--bad"] = %s},
 ''' % count)
             self.run_cli("limit", "--bad", success=False)
 
+    def test_ambiguous_flag_names(self):
+        for flags in (
+            '{["--out"] = 1, ["--out="] = 1}',
+            '{"--out", ["--out="] = 1}',
+            '{"--out", "--out"}',
+        ):
+            with self.subTest(flags=flags):
+                self.config.write_text('''
+require "edut".setup {commands = {{"test", flags = %s,
+  execute = function() print("EXECUTED") end}}}
+''' % flags)
+                output = self.run_cli("test", "--out=value", success=False)
+                self.assertIn("Ambiguous flag names", output)
+
+    def test_caught_setup_error_preserves_previous_commands(self):
+        for invalid in (
+            '{"broken", flags = {["--bad"] = -1}, execute = function() end}',
+            '{"broken", subcommands = {{"child", flags = {["--bad"] = -1}, '
+            'execute = function() end}}, execute = function() end}',
+        ):
+            with self.subTest(invalid=invalid):
+                self.config.write_text(CONFIG + '''
+local ok = pcall(require "edut".setup, {commands = {
+  {"partial", execute = function() print("EXECUTED") end},
+  %s,
+  {"later", execute = function() print("EXECUTED") end},
+}})
+assert(not ok)
+''' % invalid)
+                self.run_cli("plain", "still-registered")
+                self.run_cli("test", "child")
+                self.run_cli("partial", success=False)
+                self.run_cli("later", success=False)
+
+    def test_caught_first_setup_error_leaves_no_commands(self):
+        self.config.write_text('''
+local ok = pcall(require "edut".setup, {commands = {
+  {"partial", execute = function() print("EXECUTED") end},
+  {"broken", flags = {["--bad"] = -1}, execute = function() end},
+}})
+assert(not ok)
+''')
+        self.run_cli("partial", success=False)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -54,6 +54,10 @@ the remaining values are separate arguments. For a name ending in `=`, the exact
 token (for example `--output-file=`) retains its original meaning and expects a
 separate value; pass an empty quoted argument to supply an empty value.
 
+Flag names within a command must be unique even after removing a trailing `=`.
+For example, declaring both `--output` and `--output=` is rejected because
+`--output=file.txt` would otherwise be ambiguous.
+
 ## Development
 
 After building, run the CLI regression tests on Unix with Python 3:
