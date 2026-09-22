@@ -8,6 +8,20 @@
 #include "util/arena.h"
 #include "command.h"
 
+#define HELP_MESSAGE "edut - Define and run custom CLI commands in one place.\n" \
+  "Configure commands, subcommands, flags, and behavior in Lua.\n"               \
+  "\n"                                                                           \
+  "Usage: edut <command> [arguments]\n"                                          \
+  "       edut --help | -h\n"                                                    \
+  "       edut --version | -v\n"                                                 \
+  "\n"                                                                           \
+  "Options:\n"                                                                   \
+  "  -h, --help     Show this help and exit.\n"                                  \
+  "  -v, --version  Show the application version and exit.\n"                    \
+  "\n"                                                                           \
+  "Commands are defined in your edut Lua configuration.\n"                       \
+  "The bundled configuration provides the scripts command."
+
 #define EDUT_VERSION "1.0.0"
 
 // A trailing '=' does not distinguish flags when parsing attached values.
@@ -283,19 +297,7 @@ int main(int argc, char **argv) {
   // Built-in options must work without loading or executing user configuration.
   if(argc > 1) {
     if(strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
-      puts("edut - Define and run custom CLI commands in one place.\n"
-        "Configure commands, subcommands, flags, and behavior in Lua.\n"
-        "\n"
-        "Usage: edut <command> [arguments]\n"
-        "       edut --help | -h\n"
-        "       edut --version | -v\n"
-        "\n"
-        "Options:\n"
-        "  -h, --help     Show this help and exit.\n"
-        "  -v, --version  Show the application version and exit.\n"
-        "\n"
-        "Commands are defined in your edut Lua configuration.\n"
-        "The bundled configuration provides the scripts command.");
+      puts(HELP_MESSAGE);
       return EXIT_SUCCESS;
     }
     if(strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0) {
