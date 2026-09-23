@@ -22,7 +22,7 @@
   "Commands are defined in your edut Lua configuration.\n"                       \
   "The bundled configuration provides the scripts command."
 
-#define EDUT_VERSION "1.0.0"
+#define EDUT_VERSION "1.0.1"
 
 // A trailing '=' does not distinguish flags when parsing attached values.
 static size_t flag_name_length(const char *name) {
