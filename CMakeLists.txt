@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.15)
-project(edut C)
+project(edut CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Lua REQUIRED)
 
 add_executable( edut
-  src/main.c
-  src/command.c
-  src/util/arena.c
+  src/main.cpp
+  src/command.cpp
+  src/util/arena.cpp
 )
 
 target_include_directories( edut PRIVATE

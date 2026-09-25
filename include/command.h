@@ -1,7 +1,9 @@
 #ifndef COMMAND_H
 #define COMMAND_H
 
-#include <lua.h>
+extern "C" {
+  #include <lua.h>
+}
 #include <stdbool.h>
 
 #define MAX_FLAGS 20     

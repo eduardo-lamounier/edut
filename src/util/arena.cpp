@@ -7,13 +7,13 @@ struct arena {
 };
 
 arena_t *arena_new(size_t capacity) {
-  arena_t *arena = calloc(1, sizeof(arena_t));
+  arena_t *arena = (arena_t*)calloc(1, sizeof(arena_t));
 
   if(arena == NULL)
     abort();
 
   arena->capacity = capacity; 
-  arena->data = calloc(capacity, 1);
+  arena->data = (char*)calloc(capacity, 1);
 
   if(arena->data == NULL) {
     free(arena);

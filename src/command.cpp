@@ -1,6 +1,8 @@
-#include<string.h>
-#include<stdlib.h>
-#include<lauxlib.h>
+extern "C" {
+  #include<string.h>
+  #include<stdlib.h>
+  #include<lauxlib.h>
+}
 
 #include "command.h"
 

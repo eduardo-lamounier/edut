@@ -2,8 +2,10 @@
 #include<assert.h>
 #include<stdlib.h>
 #include<string.h>
-#include<lauxlib.h>
-#include<lualib.h>
+extern "C" {
+  #include<lauxlib.h>
+  #include<lualib.h>
+}
 
 #include "util/arena.h"
 #include "command.h"
