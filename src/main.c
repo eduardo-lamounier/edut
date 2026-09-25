@@ -135,7 +135,7 @@ int l_setup(lua_State *L) {
   size_t new_commands_amount = lua_tointeger(L, -1);
   lua_pop(L, 1);
 
-  command_t *new_commands = malloc(sizeof(command_t) * new_commands_amount);
+  command_t *new_commands = (command_t*)malloc(sizeof(command_t) * new_commands_amount);
   if(new_commands == NULL && new_commands_amount != 0)
     return luaL_error(L, "Could not allocate commands");
 
@@ -219,7 +219,7 @@ char *get_user_lua_configs(arena_t *arena) {
   if(xdg_env != NULL && strcmp(xdg_env, "") != 0) {
     const char *suffix = "/edut";
     size_t len = strlen(xdg_env) + strlen(suffix);
-    configs_path = arena_alloc(arena, len + 1, 1);
+    configs_path = (char*)arena_alloc(arena, len + 1, 1);
     sprintf(configs_path, "%s%s", xdg_env, suffix);
     return configs_path;
   }
@@ -231,7 +231,7 @@ char *get_user_lua_configs(arena_t *arena) {
 
   const char *suffix = "/.config/edut";
   size_t len = strlen(home_folder) + strlen(suffix);
-  configs_path = arena_alloc(arena, len + 1, 1);
+  configs_path = (char*)arena_alloc(arena, len + 1, 1);
   sprintf(configs_path, "%s%s", home_folder, suffix);
 
   return configs_path;
@@ -279,7 +279,7 @@ lua_State *load_user_configs() {
 
   const char *suffix = "/init.lua";
   size_t len = strlen(user_configs_folder) + strlen(suffix);
-  init_file_path = arena_alloc(arena, len + 1, 1);
+  init_file_path = (char*)arena_alloc(arena, len + 1, 1);
   sprintf(init_file_path, "%s%s", user_configs_folder, suffix);
 
   if(luaL_dofile(L, init_file_path) != LUA_OK) {
