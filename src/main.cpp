@@ -105,9 +105,7 @@ void register_command(lua_State *L, command_t *commands, int idx) {
 
     assert(commands[idx].subcommands_amount <= MAX_SUBCOMMANDS);
 
-    commands[idx].sub_commands = (command_t*)malloc(
-      sizeof(command_t) * commands[idx].subcommands_amount
-    );
+    commands[idx].sub_commands = new command_t[commands[idx].subcommands_amount];
 
     for(size_t j = 0; j < commands[idx].subcommands_amount; j++)
       register_command(L, commands[idx].sub_commands, j);
@@ -137,7 +135,7 @@ int l_setup(lua_State *L) {
   size_t new_commands_amount = lua_tointeger(L, -1);
   lua_pop(L, 1);
 
-  command_t *new_commands = (command_t*)malloc(sizeof(command_t) * new_commands_amount);
+  command_t *new_commands = new command_t[new_commands_amount];
   if(new_commands == NULL && new_commands_amount != 0)
     return luaL_error(L, "Could not allocate commands");
 

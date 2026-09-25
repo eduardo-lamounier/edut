@@ -140,7 +140,7 @@ int l_command_getname(lua_State *L) {
 void free_parsed_input(parsed_input_t *parsed_input) {
   while(parsed_input != NULL) {
     parsed_input_t * temp = parsed_input->for_subcommand;
-    free(parsed_input);
+    delete parsed_input;
     parsed_input = temp;
   }
 }
@@ -149,8 +149,7 @@ void free_parsed_input(parsed_input_t *parsed_input) {
 //
 // Returns NULL for parsing errors
 parsed_input_t *parse_input(char **args, int n) {
-  parsed_input_t *parsed_input =
-    (parsed_input_t*)calloc(1, sizeof(parsed_input_t));
+  parsed_input_t *parsed_input = new parsed_input_t();
 
   if(parsed_input == NULL) return NULL;
  
@@ -191,8 +190,7 @@ parsed_input_t *parse_input(char **args, int n) {
     }
 
     if(subcommand != NULL) {
-      current->for_subcommand =
-        (parsed_input_t*)calloc(1, sizeof(parsed_input_t));
+      current->for_subcommand = new parsed_input_t();
 
       if(current->for_subcommand == NULL) {
         free_parsed_input(parsed_input);
