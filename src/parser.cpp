@@ -4,7 +4,7 @@
 #include "parser.hpp"
 
 // Searches for a command with a specific name.
-static command_t *command_withname(std::span<command_t> commands, const std::string& name) {
+static Command *command_withname(std::span<Command> commands, const std::string& name) {
   for(auto& command : commands)
     if(command.name == name)
       return &command;
@@ -16,7 +16,7 @@ static command_t *command_withname(std::span<command_t> commands, const std::str
 //
 // Returns NULL if the command does not contain a subcommand
 // with the specified name.
-static command_t *get_subcommand_of(command_t& command, const std::string& name) {
+static Command *get_subcommand_of(Command& command, const std::string& name) {
   for(auto& subcommand : command.sub_commands)
     if(subcommand.name == name) return &subcommand;
 
@@ -24,7 +24,7 @@ static command_t *get_subcommand_of(command_t& command, const std::string& name)
 }
 
 // Returns the first matching flag's index, or no value if it is absent.
-std::optional<size_t> find_flag(std::span<const flag_t> flags,
+std::optional<size_t> find_flag(std::span<const Flag> flags,
     std::string_view name) {
   for(size_t i = 0; i < flags.size(); i++)
     if(flags[i].text == name) return i;
@@ -33,7 +33,7 @@ std::optional<size_t> find_flag(std::span<const flag_t> flags,
 }
 
 // Preserve the registered flag name while accepting an attached first value.
-static bool find_input_flag(const command_t& command, const std::string& text, size_t *out_idx,
+static bool find_input_flag(const Command& command, const std::string& text, size_t *out_idx,
     std::optional<std::string> *inline_value) {
   inline_value->reset();
   if(auto idx = find_flag(command.flags, text)) {
@@ -44,7 +44,7 @@ static bool find_input_flag(const command_t& command, const std::string& text, s
   size_t prefix = text.find('=');
   if(prefix == std::string::npos) return false;
   for(size_t i = 0; i < command.flags.size(); i++) {
-    const flag_t *flag = &command.flags[i];
+    const Flag *flag = &command.flags[i];
     size_t len = flag->text.size();
     if(flag->arguments_amount > 0 &&
         (len == prefix || (len == prefix + 1 && flag->text[prefix] == '=')) &&
@@ -57,14 +57,14 @@ static bool find_input_flag(const command_t& command, const std::string& text, s
   return false;
 }
 
-static bool missing_flag_arguments(parsed_input_t *input) {
+static bool missing_flag_arguments(ParsedInput *input) {
   if(input->flags.empty()) return false;
   return input->flags_arguments.back().size() < input->flags.back().arguments_amount;
 }
 
-void free_parsed_input(parsed_input_t *parsed_input) {
+void free_parsed_input(ParsedInput *parsed_input) {
   while(parsed_input != NULL) {
-    parsed_input_t * temp = parsed_input->for_subcommand;
+    ParsedInput * temp = parsed_input->for_subcommand;
     delete parsed_input;
     parsed_input = temp;
   }
@@ -73,19 +73,19 @@ void free_parsed_input(parsed_input_t *parsed_input) {
 // Parses the user input
 //
 // Returns NULL for parsing errors
-parsed_input_t *parse_input(std::span<command_t> commands, std::span<const std::string> args) {
+ParsedInput *Parser::parse_input(std::span<const std::string> args) {
   if(args.empty()) return NULL;
-  command_t *command = command_withname(commands, args.front());
+  Command *command = command_withname(commands, args.front());
   if(command == NULL) return NULL;
 
-  // Release the entire chain automatically if parsing fails.
-  std::unique_ptr<parsed_input_t, decltype(&free_parsed_input)> parsed_input(
-    new parsed_input_t(), free_parsed_input);
+  std::unique_ptr<ParsedInput, decltype(&free_parsed_input)> parsed_input(
+    new ParsedInput(), free_parsed_input);
+
   parsed_input->command = command;
-  parsed_input_t *current = parsed_input.get();
+  ParsedInput *current = parsed_input.get();
 
   for(const auto& arg : args.subspan(1)) {
-    command_t *subcommand = get_subcommand_of(*current->command, arg);
+    Command *subcommand = get_subcommand_of(*current->command, arg);
     size_t command_flag_idx;
     std::optional<std::string> inline_value;
     bool is_flag = find_input_flag(*current->command, arg,
@@ -102,7 +102,7 @@ parsed_input_t *parse_input(std::span<command_t> commands, std::span<const std::
     }
 
     if(subcommand != NULL) {
-      current->for_subcommand = new parsed_input_t();
+      current->for_subcommand = new ParsedInput();
 
       current = current->for_subcommand;
       current->command = subcommand;

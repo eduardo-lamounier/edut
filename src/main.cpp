@@ -48,7 +48,10 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  parsed_input_t *parsed_input = parse_input(get_registered_commands(), args);
+  auto commands = get_registered_commands();
+  Parser parser(commands);
+
+  ParsedInput *parsed_input = parser.parse_input(args);
 
   if(parsed_input == NULL) {
     lua_close(L);

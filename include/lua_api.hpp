@@ -8,8 +8,8 @@ extern "C" {
 #include "parser.hpp"
 
 int lua_require_api(lua_State *L);
-std::span<command_t> get_registered_commands();
-bool command_execute(lua_State *L, parsed_input_t *parsed_input);
+std::span<Command> get_registered_commands();
+bool command_execute(lua_State *L, ParsedInput *parsed_input);
 void report_error(const std::string& msg);
 
 #endif

@@ -8,16 +8,16 @@
 #define MAX_SUBCOMMANDS 10
 #define MAX_ARGUMENTS 10
 
-typedef struct {
+struct Flag {
   std::string text;
   size_t arguments_amount;
-} flag_t;
+};
 
-typedef struct command {
+struct Command {
   int execute_ref;
-  std::vector<flag_t> flags;
+  std::vector<Flag> flags;
   std::string name;
-  std::vector<command> sub_commands;
-} command_t;
+  std::vector<Command> sub_commands;
+};
 
 #endif
