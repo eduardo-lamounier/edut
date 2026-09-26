@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import time
 import sys
 import tempfile
 import unittest
@@ -65,6 +67,34 @@ class CliTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, output)
             self.assertNotIn("EXECUTED", output)
         return output
+
+    def test_callback_errors(self):
+        for error in ('error("callback failed")', 'error({detail = "failure"})'):
+            with self.subTest(error=error):
+                self.config.write_text('''
+require "edut".setup {commands = {{"fail", execute = function() %s end}}}
+''' % error)
+                self.assertIn("ERROR", self.run_cli("fail", success=False))
+
+    def test_nested_callback_errors(self):
+        self.config.write_text('''
+require "edut".setup {commands = {{"parent", flags = {"--catch"},
+  subcommands = {{"child", execute = function() error("nested failure") end}},
+  execute = function(input)
+    local child = input.get_subcommand()
+    if input.contains_flag("--catch") then
+      local ok, message = pcall(child.execute, input.for_subcommand())
+      assert(not ok and message:find("nested failure", 1, true))
+      print("EXECUTED")
+    else
+      child.execute(input.for_subcommand())
+      print("EXECUTED")
+    end
+  end,
+}}}
+''')
+        self.assertIn("nested failure", self.run_cli("parent", "child", success=False))
+        self.run_cli("parent", "--catch", "child")
 
     def test_home_fallback(self):
         home = self.root / "home"
@@ -326,6 +356,80 @@ local ok = pcall(require "edut".setup, {commands = {
 assert(not ok)
 ''')
         self.run_cli("partial", success=False)
+
+
+class ScriptTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.config_root = self.root / "config space ' $(touch injected)"
+        sample = Path(__file__).resolve().parents[1] / "config"
+        target = self.config_root / "edut"
+        target.mkdir(parents=True)
+        shutil.copy(sample / "init.lua", target / "init.lua")
+        shutil.copytree(sample / "lua", target / "lua")
+        self.scripts = target / "scripts"
+        self.scripts.mkdir()
+        self.env = dict(os.environ, XDG_CONFIG_HOME=str(self.config_root))
+
+    def run_script(self, name, *args, success=True):
+        result = subprocess.run(
+            [str(EXECUTABLE), "scripts", "run", name, *args],
+            env=self.env, cwd=self.root, capture_output=True, text=True, timeout=5,
+        )
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode == 0, success, output)
+        if not success:
+            self.assertNotIn("The script ran successfully", output)
+            self.assertNotIn("Script launched", output)
+        self.assertFalse((self.root / "injected").exists())
+        return output
+
+    def test_quoted_paths_and_output(self):
+        name = "-script ' ; $(touch injected).sh"
+        (self.scripts / name).write_text('printf "stdout\\n"; printf "stderr\\n" >&2\n')
+        output_file = self.root / "-output ' ; $(touch injected).txt"
+        output_file.write_text("existing\n")
+        output = self.run_script(name, "--output-file=" + output_file.name)
+        self.assertIn("The script ran successfully", output)
+        self.assertIn("stdout", output)
+        self.assertEqual(output_file.read_text(), "existing\nstdout\nstderr\n")
+
+    def test_script_and_capture_failures(self):
+        (self.scripts / "fail.sh").write_text("echo failed; exit 7\n")
+        for args in ((), ("--output-file=log.txt",)):
+            with self.subTest(args=args):
+                output = self.run_script("fail.sh", *args, success=False)
+                self.assertIn("exit 7", output)
+        (self.scripts / "ok.sh").write_text("echo success\n")
+        self.run_script("ok.sh", "--output-file=missing/log.txt", success=False)
+        self.run_script("ok.sh", "--output-file=", "", success=False)
+        if Path("/dev/full").exists():
+            self.run_script("ok.sh", "--output-file=/dev/full", success=False)
+
+    def test_script_path_policy(self):
+        outside = self.root / "outside.sh"
+        outside.write_text("touch injected\n")
+        (self.scripts / "link.sh").symlink_to(outside)
+        (self.scripts / "directory").mkdir()
+        for name in ("", ".", "..", "../outside.sh", str(outside),
+                     "link.sh", "missing.sh", "directory"):
+            with self.subTest(name=name):
+                self.run_script(name, success=False)
+
+    def test_background_launch(self):
+        (self.scripts / "background.sh").write_text("echo BACKGROUND_DONE; exit 7\n")
+        output = self.run_script("background.sh", "--on-background", "--output-file=background.txt")
+        self.assertIn("completion is not tracked", output)
+        self.assertNotIn("The script ran successfully", output)
+        log = self.root / "background.txt"
+        deadline = time.monotonic() + 3
+        while "BACKGROUND_DONE" not in log.read_text() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertIn("BACKGROUND_DONE", log.read_text())
+        self.run_script("missing.sh", "--on-background", success=False)
+        self.run_script("background.sh", "--on-background", "--output-file=missing/log.txt", success=False)
 
 
 if __name__ == "__main__":

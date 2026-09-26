@@ -56,9 +56,9 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  command_execute(L, parsed_input);
+  bool success = command_execute(L, parsed_input);
 
   lua_close(L);
   free_parsed_input(parsed_input);
-  return EXIT_SUCCESS;
+  return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }

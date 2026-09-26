@@ -17,6 +17,61 @@ local function getScriptsFolder()
   return configFolder .. "/edut/scripts/"
 end
 
+-- All dynamic values are shell arguments, never shell program text.
+local function shellQuote(value)
+  if value:find("%z") then error("Paths cannot contain NUL bytes", 0) end
+  return "'" .. value:gsub("'", "'\"'\"'") .. "'"
+end
+
+local function runScript(scriptName, outputFile, background)
+  -- Only direct, non-symlink files in the scripts directory may be run.
+  if scriptName == "" or scriptName == "." or scriptName == ".."
+    or scriptName:find("/", 1, true) or scriptName:find("\\", 1, true)
+  then
+    error("Expected a script filename inside the scripts directory", 0)
+  end
+
+  local scriptPath = getScriptsFolder() .. scriptName
+  if scriptPath:sub(1, 1) ~= "/" then scriptPath = "./" .. scriptPath end
+
+  local runner = [=[
+set -o pipefail
+script=$1
+output=$2
+background=$3
+if [[ ! -f "$script" || ! -r "$script" || -L "$script" ]]; then
+  printf 'Script must be a readable, non-symlink file: %s\n' "$script" >&2
+  exit 1
+fi
+if [[ -n "$output" ]]; then
+  command -v tee >/dev/null || exit 1
+  : >> "$output" || exit 1
+fi
+run_script() {
+  if [[ -n "$output" ]]; then
+    bash -- "$script" 2>&1 | tee -a -- "$output"
+  else
+    bash -- "$script"
+  fi
+}
+if [[ "$background" == yes ]]; then
+  run_script </dev/null >/dev/null 2>&1 &
+else
+  run_script
+fi
+]=]
+
+  if outputFile == "" then error("Output file path cannot be empty", 0) end
+  local success, reason, status = os.execute(
+    "bash -c " .. shellQuote(runner) .. " edut-script "
+      .. shellQuote(scriptPath) .. " " .. shellQuote(outputFile or "") .. " "
+      .. shellQuote(background and "yes" or "no")
+  )
+  if not success then
+    error("Script execution or launch failed (" .. tostring(reason) .. " " .. tostring(status) .. ")", 0)
+  end
+end
+
 local function getUserTerminalWidth()
   local outputFile = io.popen "tput cols 2> /dev/null"
 
@@ -71,19 +126,11 @@ return {
           print("Running '" .. scriptName .. "'...")
           print(string.rep("`", getUserTerminalWidth()))
 
-          local success = os.execute(
-            "bash "
-              .. getScriptsFolder()
-              .. scriptName
-              .. (options.outputFilePath and " 2>&1 | tee -a " .. options.outputFilePath or "")
-              .. (options.runOnBackground and " &" or "")
-          )
+          runScript(scriptName, options.outputFilePath, options.runOnBackground)
 
           print("\n" .. string.rep("`", getUserTerminalWidth()))
-          print(
-            success and "The script ran successfully"
-              or "Something went wrong when running (or trying to run) the script"
-          )
+          print(options.runOnBackground and "Script launched in background; completion is not tracked"
+            or "The script ran successfully")
         end,
       },
       {

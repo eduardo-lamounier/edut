@@ -9,7 +9,7 @@ extern "C" {
 
 int lua_require_api(lua_State *L);
 std::span<command_t> get_registered_commands();
-void command_execute(lua_State *L, parsed_input_t *parsed_input);
+bool command_execute(lua_State *L, parsed_input_t *parsed_input);
 void report_error(const std::string& msg);
 
 #endif

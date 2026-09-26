@@ -184,22 +184,18 @@ int lua_require_api(lua_State *L) {
   return 1;
 }
 
-// Executes a command with the specified parsed_input.
-//
-// The execution function must ALREADY be in the lua stack.
-void command_execute(lua_State *L, parsed_input_t *parsed_input) {
-  if(parsed_input != NULL) {
-    lua_rawgeti(L, LUA_REGISTRYINDEX, parsed_input->command->execute_ref);
-    push_lua_parsedinput(L, parsed_input);
-  }
+// Executes a top-level callback and reports an uncaught Lua error.
+bool command_execute(lua_State *L, parsed_input_t *parsed_input) {
+  lua_rawgeti(L, LUA_REGISTRYINDEX, parsed_input->command->execute_ref);
+  push_lua_parsedinput(L, parsed_input);
 
   if(lua_pcall(L, 1, 0, 0) != LUA_OK) {
-    printf(
-      "ERROR: Lua error when executing command: %s",
-      lua_tostring(L, -1)
-    );
+    const char *message = lua_tostring(L, -1);
+    report_error(message == NULL ? "Lua callback raised a non-string error" : message);
     lua_pop(L, 1);
+    return false;
   }
+  return true;
 }
 
 // Pushes a command into the lua stack.
@@ -226,8 +222,9 @@ static int l_command_execute(lua_State *L) {
     (command_t*)lua_touserdata(L, lua_upvalueindex(1));
 
   lua_rawgeti(L, LUA_REGISTRYINDEX, command->execute_ref);
-  lua_pushvalue(L, -2);
-  command_execute(L, NULL);
+  lua_pushvalue(L, 1);
+  // Let errors reach the caller, including an explicit Lua pcall handler.
+  lua_call(L, 1, 0);
   return 0;
 }
 
