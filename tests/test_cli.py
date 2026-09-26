@@ -76,6 +76,23 @@ require "edut".setup {commands = {{"fail", execute = function() %s end}}}
 ''' % error)
                 self.assertIn("ERROR", self.run_cli("fail", success=False))
 
+    def test_command_wrapper_without_input(self):
+        self.config.write_text('''
+require "edut".setup {commands = {{"parent",
+  subcommands = {{"child", execute = function(input)
+    assert(input == nil)
+    print("EXECUTED")
+  end}},
+  execute = function(input)
+    local child = input.get_subcommand()
+    child.execute()
+    child.execute(nil)
+    child.execute(nil, "ignored")
+  end,
+}}}
+''')
+        self.run_cli("parent", "child")
+
     def test_nested_callback_errors(self):
         self.config.write_text('''
 require "edut".setup {commands = {{"parent", flags = {"--catch"},

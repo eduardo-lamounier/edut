@@ -221,6 +221,8 @@ static int l_command_execute(lua_State *L) {
   command_t *command =
     (command_t*)lua_touserdata(L, lua_upvalueindex(1));
 
+  // Supply nil when the wrapper is called without an input argument.
+  lua_settop(L, 1);
   lua_rawgeti(L, LUA_REGISTRYINDEX, command->execute_ref);
   lua_pushvalue(L, 1);
   // Let errors reach the caller, including an explicit Lua pcall handler.
