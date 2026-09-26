@@ -302,7 +302,7 @@ static int l_parsedinput_containsflag(lua_State *L) {
 
   const char *flag = luaL_checkstring(L, 1);
 
-  lua_pushboolean(L, find_flag(parsed_input->flags, flag).has_value());
+  lua_pushboolean(L, parsed_input->find_flag(flag) != nullptr);
   return 1;
 }
 
@@ -319,12 +319,12 @@ static int l_parsedinput_getargument(lua_State *L) {
     // Borrow Lua strings: luaL_error may jump past C++ destructors.
     const char *flag_text = luaL_checkstring(L, 1);
     argument_index = luaL_checkinteger(L, 2);
-    auto flag_idx = find_flag(parsed_input->flags, flag_text);
+    const ParsedFlag *flag = parsed_input->find_flag(flag_text);
 
-    if(!flag_idx)
+    if(!flag)
       return luaL_error(L, "Unknown flag passed for this command."
         "\nIt's possible to check whether the flag exists with 'contains_flag'.");
-    arguments = &parsed_input->flags_arguments[*flag_idx];
+    arguments = &flag->arguments;
   } else if(lua_type(L, 1) == LUA_TNUMBER) {
     argument_index = luaL_checkinteger(L, 1);
     arguments = &parsed_input->direct_arguments;

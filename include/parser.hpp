@@ -8,13 +8,20 @@
 
 #include "command.hpp"
 
+struct ParsedFlag {
+  Flag flag;
+  std::vector<std::string> arguments;
+};
+
 struct ParsedInput {
   Command *command = nullptr; // Borrowed from registered command storage.
-  std::vector<Flag> flags;
-  std::vector<std::vector<std::string>> flags_arguments;
+  std::vector<ParsedFlag> flags;
   std::vector<std::string> direct_arguments; // Arguments passed directly to the subcommand
                                              // and not to any flag
   std::unique_ptr<ParsedInput> for_subcommand;
+
+  // Returns the first occurrence, or nullptr if the flag is absent.
+  const ParsedFlag *find_flag(std::string_view name) const;
 };
 
 class Parser {
@@ -26,8 +33,5 @@ public:
   
   Parser(std::span<Command> commands) : commands(commands) { }
 };
-
-// Returns the first matching flag's index, or no value if it is absent.
-std::optional<size_t> find_flag(std::span<const Flag> flags, std::string_view name);
 
 #endif
