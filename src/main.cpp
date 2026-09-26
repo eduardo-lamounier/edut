@@ -21,7 +21,7 @@
   "Commands are defined in your edut Lua configuration.\n"                       \
   "The bundled configuration provides the scripts command."
 
-#define EDUT_VERSION "1.0.1"
+#define EDUT_VERSION "1.1.0"
 
 int main(int argc, char **argv) {
   const std::vector<std::string> args(argv + 1, argv + argc);

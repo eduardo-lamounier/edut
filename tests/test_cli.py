@@ -144,7 +144,7 @@ require "edut".setup {commands = {{"parent", flags = {"--catch"},
                     self.assertEqual(result.stderr, "")
                     self.assertNotIn("CONFIG_LOADED", result.stdout)
                     if option in ("--version", "-v"):
-                        self.assertEqual(result.stdout, "edut 1.0.1\n")
+                        self.assertEqual(result.stdout, "edut 1.1.0\n")
                     else:
                         self.assertIn("Define and run custom CLI commands", result.stdout)
                         self.assertIn("Usage: edut", result.stdout)
