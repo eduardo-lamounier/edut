@@ -2,6 +2,8 @@
 #define COMMAND_H
 
 #include<string>
+#include<vector>
+#include<span>
 
 extern "C" {
   #include <lua.h>
@@ -20,27 +22,21 @@ typedef struct {
 
 typedef struct command {
   int execute_ref;
-  flag_t flags[MAX_FLAGS];
+  std::vector<flag_t> flags;
   std::string name;
-  struct command *sub_commands;
-  size_t subcommands_amount;
-  size_t flags_amount;
+  std::vector<command> sub_commands;
 } command_t;
 
 typedef struct parsed_input {
   command_t *command;
-  flag_t flags[MAX_FLAGS];
-  size_t flags_amount;
-  std::string flags_arguments[MAX_FLAGS][MAX_ARGUMENTS];
-  size_t flags_arguments_amount[MAX_FLAGS];
-  std::string direct_arguments[MAX_ARGUMENTS]; // Arguments passed directly to the subcommand
+  std::vector<flag_t> flags;
+  std::vector<std::vector<std::string>> flags_arguments;
+  std::vector<std::string> direct_arguments; // Arguments passed directly to the subcommand
                                          // and not to any flag
-  size_t direct_arguments_amount;
   struct parsed_input *for_subcommand;
 } parsed_input_t;
 
-extern size_t registered_commands_amount;
-extern command_t *commands;
+extern std::vector<command_t> *commands;
 
 void command_execute(lua_State *L, parsed_input_t *parsed_input);
 
@@ -50,7 +46,7 @@ int l_command_execute(lua_State *L);
 int l_command_getname(lua_State *L);
 
 void free_parsed_input(parsed_input_t *parsed_input);
-parsed_input_t *parse_input(const std::string *args, int n);
+parsed_input_t *parse_input(std::span<const std::string> args);
 
 void push_lua_parsedinput(lua_State *L, parsed_input_t *parsed_input);
 parsed_input_t *pop_lua_parsedinput(lua_State *L);

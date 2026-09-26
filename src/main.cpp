@@ -2,9 +2,9 @@
 #include<string>
 #include<optional>
 #include<vector>
+#include<list>
 
 #include<stdio.h>
-#include<assert.h>
 #include<stdlib.h>
 extern "C" {
   #include<lauxlib.h>
@@ -41,7 +41,7 @@ static size_t flag_name_length(const std::string& name) {
 // 'commands' table - that's going to be registered.
 //
 // The 'commands' table must be ALREADY in the stack.
-void register_command(lua_State *L, command_t *commands, int idx) {
+void register_command(lua_State *L, std::vector<command_t>& commands, int idx) {
   int stack = lua_gettop(L);
   commands[idx] = command_t{};
 
@@ -55,12 +55,13 @@ void register_command(lua_State *L, command_t *commands, int idx) {
   if(!lua_isnil(L, -1) && lua_istable(L, -1)) {
     lua_pushnil(L);
     while(lua_next(L, -2) != 0) {
-      if(commands[idx].flags_amount >= MAX_FLAGS)
+      if(commands[idx].flags.size() >= MAX_FLAGS)
         luaL_error(L, "Too many flags for command '%s' (maximum %d)",
           commands[idx].name.c_str(), MAX_FLAGS);
 
-      size_t flag_idx = commands[idx].flags_amount;
+      size_t flag_idx = commands[idx].flags.size();
 
+      commands[idx].flags.emplace_back();
       std::string& flag_text = commands[idx].flags[flag_idx].text;
       size_t flag_arguments_amount;
       
@@ -90,7 +91,6 @@ void register_command(lua_State *L, command_t *commands, int idx) {
 
       commands[idx].flags[flag_idx].arguments_amount = flag_arguments_amount;
 
-      commands[idx].flags_amount++;
       lua_pop(L, 1);
     }
   }
@@ -99,14 +99,16 @@ void register_command(lua_State *L, command_t *commands, int idx) {
   lua_getfield(L, -1, "subcommands");
   if(!lua_isnil(L, -1) && lua_istable(L, -1)) {
     lua_len(L, -1);
-    commands[idx].subcommands_amount = lua_tointeger(L, -1);
+    size_t subcommands_amount = lua_tointeger(L, -1);
     lua_pop(L, 1);
 
-    assert(commands[idx].subcommands_amount <= MAX_SUBCOMMANDS);
+    if(subcommands_amount > MAX_SUBCOMMANDS)
+      luaL_error(L, "Too many subcommands for command '%s' (maximum %d)",
+        commands[idx].name.c_str(), MAX_SUBCOMMANDS);
 
-    commands[idx].sub_commands = new command_t[commands[idx].subcommands_amount];
+    commands[idx].sub_commands.resize(subcommands_amount);
 
-    for(size_t j = 0; j < commands[idx].subcommands_amount; j++)
+    for(size_t j = 0; j < commands[idx].sub_commands.size(); j++)
       register_command(L, commands[idx].sub_commands, j);
   }
   lua_pop(L, 1);
@@ -118,6 +120,10 @@ void register_command(lua_State *L, command_t *commands, int idx) {
 
   lua_settop(L, stack);
 }
+
+// Keep every registration tree alive while Lua may retain command wrappers.
+// Storage also survives luaL_error, which can jump out of registration.
+static std::list<std::vector<command_t>> command_trees;
 
 // Implementation of the framework's function 'setup'.
 //
@@ -134,16 +140,14 @@ int l_setup(lua_State *L) {
   size_t new_commands_amount = lua_tointeger(L, -1);
   lua_pop(L, 1);
 
-  command_t *new_commands = new command_t[new_commands_amount];
-  if(new_commands == NULL && new_commands_amount != 0)
-    return luaL_error(L, "Could not allocate commands");
+  command_trees.emplace_back(new_commands_amount);
+  auto& new_commands = command_trees.back();
 
   for(size_t i = 0; i < new_commands_amount; i++)
     register_command(L, new_commands, i);
 
   // Lua may catch registration errors with pcall. Publish only complete trees.
-  commands = new_commands;
-  registered_commands_amount = new_commands_amount;
+  commands = &new_commands;
 
   return 0;
 }
@@ -298,7 +302,7 @@ int main(int argc, char **argv) {
     throw_error("No argument passed to the program.");
   }
 
-  parsed_input_t *parsed_input = parse_input(args.data(), argc - 1);
+  parsed_input_t *parsed_input = parse_input(args);
 
   if(parsed_input == NULL) {
     lua_close(L);

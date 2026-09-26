@@ -56,14 +56,14 @@ errors now stop execution; this issue concerns errors during command callbacks.
 
 ### Command allocation lifetime
 
-Command arrays and recursive subcommand arrays allocated during registration are
-not freed. Calling `setup` repeatedly replaces the global command array without
-releasing prior arrays or their Lua registry references. The temporary path arena
-also leaks on the early configuration-discovery failure path. Define ownership
-and cleanup for successful registration, replacement, and partial failure.
-Failed registration now leaves the previously published command tree unchanged,
-including when Lua catches the failure with `pcall`, but allocations and callback
-references created during the failed attempt still need cleanup.
+Command trees are owned by containers and released at normal process exit.
+Calling `setup` repeatedly retains prior trees so command wrappers held by Lua
+remain valid. Failed registration leaves the previously published tree unchanged,
+including when Lua catches the failure with `pcall`, but partial trees are also
+retained until exit. Callback registry references remain until the Lua state is
+closed. Earlier reclamation of replaced and failed registrations still needs a
+lifetime policy that accounts for retained Lua wrappers. Configuration paths now
+use automatic string storage.
 
 ### Incomplete public declarations
 

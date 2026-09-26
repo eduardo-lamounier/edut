@@ -198,6 +198,59 @@ require "edut".setup {commands = {{"limit", flags = flags,
             if count == 21:
                 self.assertIn("Too many flags", output)
 
+    def test_subcommand_limits(self):
+        for count in (10, 11):
+            with self.subTest(count=count):
+                self.config.write_text('''
+local children = {}
+for i = 1, %d do
+  children[i] = {"child" .. i, execute = function() print("EXECUTED") end}
+end
+require "edut".setup {commands = {{"parent", subcommands = children,
+  execute = function(input)
+    input.get_subcommand().execute(input.for_subcommand())
+  end,
+}}}
+''' % count)
+                output = self.run_cli("parent", "child10", success=count == 10)
+                if count == 11:
+                    self.assertIn("Too many subcommands", output)
+
+    def test_command_wrappers_survive_repeated_setup(self):
+        self.config.write_text('''
+local api = require "edut"
+api.setup {commands = {{"parent", subcommands = {{"child",
+  execute = function(input)
+    assert(input.get_argument(1) == "original")
+    print("EXECUTED")
+  end,
+}}, execute = function(input)
+  local child = input.get_subcommand()
+  local child_input = input.for_subcommand()
+  for generation = 1, 30 do
+    api.setup {commands = {{"replacement", execute = function() end}}}
+  end
+  local ok = pcall(api.setup, {commands = {{"broken", flags = {["--bad"] = -1},
+    execute = function() end}}})
+  assert(not ok)
+  assert(child.get_name() == "child")
+  child.execute(child_input)
+end}}}
+''')
+        self.run_cli("parent", "child", "original")
+
+    def test_empty_and_replaced_command_trees(self):
+        self.config.write_text(CONFIG + '''
+require "edut".setup {commands = {}}
+''')
+        self.run_cli("plain", success=False)
+        self.config.write_text(CONFIG + '''
+require "edut".setup {commands = {{"replacement",
+  execute = function() print("EXECUTED") end}}}
+''')
+        self.run_cli("replacement")
+        self.run_cli("plain", success=False)
+
     def test_invalid_flag_arity(self):
         for count in (-1, 11, 1.5):
             self.config.write_text('''

@@ -76,7 +76,8 @@ in a disposable directory when testing.
 - `contains_flag` checks only one name, despite the bundled help code passing two.
 - Lua callback errors do not reliably propagate to the process exit status.
   Script command strings lack shell quoting, and pipelines can mask failures.
-- Command-tree allocations are not freed. Some header declarations have no
+- Command trees from replaced or failed registrations remain until process exit.
+  Some header declarations have no
   implementation, and API documentation is minimal.
 
 See `docs/known-issues.md` for details on remaining problems. Value-taking flags
