@@ -112,11 +112,11 @@ return {
     subcommands = {
       {
         "add",
-        execute = function(parsedInput) api.err "NOT IMPLEMENTED." end,
+        execute = function(input) api.err "NOT IMPLEMENTED." end,
       },
       {
         "rm",
-        execute = function(parsedInput) api.err "NOT IMPLEMENTED." end,
+        execute = function(input) api.err "NOT IMPLEMENTED." end,
       },
       {
         "run",
@@ -124,17 +124,17 @@ return {
           "--on-background",
           ["--output-file="] = 1,
         },
-        execute = function(parsedInput)
-          if parsedInput.get_argument(2) then
+        execute = function(input)
+          if input.get_argument(2) then
             api.err "Too many arguments passed: expected script name only"
           end
 
-          local scriptName = parsedInput.get_argument(1)
+          local scriptName = input.get_argument(1)
 
           local options = {
-            runOnBackground = parsedInput.contains_flag "--on-background",
-            outputFilePath = parsedInput.contains_flag "--output-file="
-              and parsedInput.get_argument("--output-file=", 1),
+            runOnBackground = input.contains_flag "--on-background",
+            outputFilePath = input.contains_flag "--output-file="
+              and input.get_argument("--output-file=", 1),
           }
 
           if not scriptName then api.err "No script passed to run" end
@@ -161,27 +161,27 @@ return {
       },
       {
         "show",
-        execute = function(parsedInput) api.err "NOT IMPLEMENTED" end,
+        execute = function(input) api.err "NOT IMPLEMENTED" end,
       },
       {
         "edit",
-        execute = function(parsedInput) api.err "NOT IMPLEMENTED" end,
+        execute = function(input) api.err "NOT IMPLEMENTED" end,
       },
     },
 
-    execute = function(parsedInput)
-      local subcommand = parsedInput.get_subcommand()
+    execute = function(input)
+      local subcommand = input.get_subcommand()
 
       if subcommand ~= nil then
-        subcommand.execute(parsedInput.for_subcommand())
+        subcommand.execute(input.for_subcommand())
         return
       end
 
-      if parsedInput.contains_flag("--help", "-h") then
+      if input.contains_flag("--help", "-h") then
         print "Used to manage existant scripts or create new custom ones"
       end
 
-      if parsedInput.get_argument(1) ~= nil then api.err "Invalid subcommand." end
+      if input.get_argument(1) ~= nil then api.err "Invalid subcommand." end
 
       print "No subcommand passed."
     end,
