@@ -64,24 +64,15 @@ static bool missing_flag_arguments(ParsedInput *input) {
   return input->flags_arguments.back().size() < input->flags.back().arguments_amount;
 }
 
-void free_parsed_input(ParsedInput *parsed_input) {
-  while(parsed_input != NULL) {
-    ParsedInput * temp = parsed_input->for_subcommand;
-    delete parsed_input;
-    parsed_input = temp;
-  }
-}
-
 // Parses the user input
 //
-// Returns NULL for parsing errors
-ParsedInput *Parser::parse_input(std::span<const std::string> args) {
-  if(args.empty()) return NULL;
+// Returns nullptr for parsing errors
+std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> args) {
+  if(args.empty()) return nullptr;
   Command *command = command_withname(commands, args.front());
-  if(command == NULL) return NULL;
+  if(command == NULL) return nullptr;
 
-  std::unique_ptr<ParsedInput, decltype(&free_parsed_input)> parsed_input(
-    new ParsedInput(), free_parsed_input);
+  auto parsed_input = std::make_unique<ParsedInput>();
 
   parsed_input->command = command;
   ParsedInput *current = parsed_input.get();
@@ -97,23 +88,23 @@ ParsedInput *Parser::parse_input(std::span<const std::string> args) {
       if(subcommand != NULL || is_flag || arg.starts_with("--")) {
         printf("Missing arguments for flag '%s'.\n",
           current->flags.back().text.c_str());
-        return NULL;
+        return nullptr;
       }
       current->flags_arguments.back().push_back(arg);
       continue;
     }
 
     if(subcommand != NULL) {
-      current->for_subcommand = new ParsedInput();
+      current->for_subcommand = std::make_unique<ParsedInput>();
 
-      current = current->for_subcommand;
+      current = current->for_subcommand.get();
       current->command = subcommand;
       continue;
     }
 
     if(is_flag) {
       if(current->flags.size() >= MAX_FLAGS) {
-        return NULL;
+        return nullptr;
       }
 
       current->flags.push_back(current->command->flags[command_flag_idx]);
@@ -126,12 +117,12 @@ ParsedInput *Parser::parse_input(std::span<const std::string> args) {
 
     if(arg.starts_with("--")) {
       printf("Invalid flag '%s' passed to command '%s'.\n", arg.c_str(), current->command->name.c_str());
-      return NULL;
+      return nullptr;
     }
 
     if(current->direct_arguments.size() >= MAX_ARGUMENTS) {
       printf("Too many positional arguments for command '%s'.\n", current->command->name.c_str());
-      return NULL;
+      return nullptr;
     }
     current->direct_arguments.push_back(arg);
   }
@@ -139,8 +130,8 @@ ParsedInput *Parser::parse_input(std::span<const std::string> args) {
   if(missing_flag_arguments(current)) {
     printf("Missing arguments for flag '%s'.\n",
       current->flags.back().text.c_str());
-    return NULL;
+    return nullptr;
   }
 
-  return parsed_input.release();
+  return parsed_input;
 }

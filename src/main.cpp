@@ -38,12 +38,15 @@ int main(int argc, char **argv) {
     }
   }
 
-  lua_State *L = load_user_configs();
-  if(L == NULL)
+  // Lua finalizers may use input wrappers: close Lua before freeing their input.
+  // Locals are destroyed in reverse declaration order, including on early returns.
+  std::unique_ptr<ParsedInput> parsed_input;
+  auto state = load_user_configs();
+  lua_State *L = state.get();
+  if(!state)
     return EXIT_FAILURE;
 
   if(argc == 1) {
-    lua_close(L);
     report_error("No argument passed to the program.");
     return EXIT_FAILURE;
   }
@@ -51,17 +54,14 @@ int main(int argc, char **argv) {
   auto commands = get_registered_commands();
   Parser parser(commands);
 
-  ParsedInput *parsed_input = parser.parse_input(args);
+  parsed_input = parser.parse_input(args);
 
-  if(parsed_input == NULL) {
-    lua_close(L);
+  if(!parsed_input) {
     report_error("Error when parsing the input.");
     return EXIT_FAILURE;
   }
 
-  bool success = command_execute(L, parsed_input);
+  bool success = command_execute(L, parsed_input.get());
 
-  lua_close(L);
-  free_parsed_input(parsed_input);
   return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }

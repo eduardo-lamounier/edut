@@ -68,6 +68,30 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("EXECUTED", output)
         return output
 
+    def test_input_wrappers_survive_until_lua_shutdown(self):
+        for fail in (False, True):
+            with self.subTest(callback_fails=fail):
+                self.config.write_text(r'''
+local api = require "edut"
+api.setup {commands = {{"parent", subcommands = {{"child",
+  flags = {["--value"] = 1}, execute = function() end}},
+  execute = function(input)
+    local child = input.for_subcommand()
+    retained = setmetatable({}, {__gc = function()
+      assert(input.get_subcommand().get_name() == "child")
+      assert(child.get_argument(1) == "positional")
+      assert(child.get_argument("--value", 1) == "value")
+      print("INPUT_FINALIZED")
+    end})
+    -- Replacing registrations must not invalidate the retained input's commands.
+    api.setup {commands = {{"replacement", execute = function() end}}}
+    %s
+  end}}}
+''' % ('error("callback failed")' if fail else 'print("EXECUTED")'))
+                output = self.run_cli("parent", "child", "positional",
+                                      "--value", "value", success=not fail)
+                self.assertIn("INPUT_FINALIZED", output)
+
     def test_callback_errors(self):
         for error in ('error("callback failed")', 'error({detail = "failure"})'):
             with self.subTest(error=error):

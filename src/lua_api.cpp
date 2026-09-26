@@ -9,6 +9,7 @@ extern "C" {
 
 #include "lua_api.hpp"
 
+// Borrowed from command_trees; the list owns all registration storage.
 static std::vector<Command> *commands;
 
 std::span<Command> get_registered_commands() {
@@ -289,7 +290,7 @@ static int l_parsedinput_forsubcommand(lua_State *L) {
     return 1;
   }
 
-  push_lua_parsedinput(L, parsed_input->for_subcommand);
+  push_lua_parsedinput(L, parsed_input->for_subcommand.get());
   return 1;
 }
 

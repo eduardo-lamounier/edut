@@ -28,17 +28,24 @@ static std::optional<std::string> get_user_lua_configs() {
 #endif
 }
 
-// Returns the lua state after the user configs
-// are loaded (still needs to be closed)
-lua_State *load_user_configs() {
-  lua_State *L = luaL_newstate();
+void LuaStateDeleter::operator()(lua_State *state) const {
+  lua_close(state);
+}
+
+// Returns ownership of the Lua state after loading user configuration.
+LuaState load_user_configs() {
+  LuaState state(luaL_newstate());
+  if(!state) {
+    puts("Couldn't create the Lua state.");
+    return nullptr;
+  }
+  lua_State *L = state.get();
 
   auto user_configs_folder = get_user_lua_configs();
 
   if(!user_configs_folder.has_value()) {
     puts("Couldn't find your configs folder.");
-    lua_close(L);
-    return NULL;
+    return nullptr;
   }
 
   luaL_openlibs(L);
@@ -62,9 +69,8 @@ lua_State *load_user_configs() {
 
   if(luaL_dofile(L, init_file_path.c_str()) != LUA_OK) {
     puts(lua_tostring(L, -1));
-    lua_close(L);
-    return NULL;
+    return nullptr;
   }
 
-  return L;
+  return state;
 }
