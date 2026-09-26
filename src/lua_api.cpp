@@ -319,6 +319,7 @@ static int l_parsedinput_getargument(lua_State *L) {
     const char *flag_text = luaL_checkstring(L, 1);
     argument_index = luaL_checkinteger(L, 2);
     auto flag_idx = find_flag(parsed_input->flags, flag_text);
+
     if(!flag_idx)
       return luaL_error(L, "Unknown flag passed for this command."
         "\nIt's possible to check whether the flag exists with 'contains_flag'.");

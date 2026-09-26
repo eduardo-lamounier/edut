@@ -12,15 +12,14 @@ struct ParsedInput {
   std::vector<Flag> flags;
   std::vector<std::vector<std::string>> flags_arguments;
   std::vector<std::string> direct_arguments; // Arguments passed directly to the subcommand
-                                         // and not to any flag
+                                             // and not to any flag
   ParsedInput *for_subcommand;
 };
 
 class Parser {
 private:
   std::span<Command> commands;
-public:
-  
+public: 
   // Command storage must remain alive and stable while parsed input is in use.
   ParsedInput *parse_input(std::span<const std::string> args);
   

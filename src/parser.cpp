@@ -25,7 +25,7 @@ static Command *get_subcommand_of(Command& command, const std::string& name) {
 
 // Returns the first matching flag's index, or no value if it is absent.
 std::optional<size_t> find_flag(std::span<const Flag> flags,
-    std::string_view name) {
+                                std::string_view name) {
   for(size_t i = 0; i < flags.size(); i++)
     if(flags[i].text == name) return i;
 
@@ -34,7 +34,7 @@ std::optional<size_t> find_flag(std::span<const Flag> flags,
 
 // Preserve the registered flag name while accepting an attached first value.
 static bool find_input_flag(const Command& command, const std::string& text, size_t *out_idx,
-    std::optional<std::string> *inline_value) {
+                            std::optional<std::string> *inline_value) {
   inline_value->reset();
   if(auto idx = find_flag(command.flags, text)) {
     *out_idx = *idx;
@@ -43,9 +43,11 @@ static bool find_input_flag(const Command& command, const std::string& text, siz
 
   size_t prefix = text.find('=');
   if(prefix == std::string::npos) return false;
+
   for(size_t i = 0; i < command.flags.size(); i++) {
     const Flag *flag = &command.flags[i];
     size_t len = flag->text.size();
+
     if(flag->arguments_amount > 0 &&
         (len == prefix || (len == prefix + 1 && flag->text[prefix] == '=')) &&
         flag->text.compare(0, prefix, text, 0, prefix) == 0) {
