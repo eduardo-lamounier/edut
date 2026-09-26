@@ -8,7 +8,6 @@ find_package(Lua REQUIRED)
 add_executable( edut
   src/main.cpp
   src/command.cpp
-  src/util/arena.cpp
 )
 
 target_include_directories( edut PRIVATE

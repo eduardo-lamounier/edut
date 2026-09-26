@@ -7,7 +7,6 @@ extern "C" {
   #include<lualib.h>
 }
 
-#include "util/arena.h"
 #include "command.h"
 
 #define HELP_MESSAGE "edut - Define and run custom CLI commands in one place.\n" \
@@ -191,12 +190,9 @@ static const struct luaL_Reg edut_api [] = {
     {NULL, NULL} 
 };
 
-// The parameter 'arena' receives the arena that will
-// be used to allocate the config file's path. 
-//
 // Returns the config directory's path if it's found, 
 // NULL otherwise.
-char *get_user_lua_configs(arena_t *arena) {
+char *get_user_lua_configs() {
   char *configs_path;
 
 #ifdef _WIN32
@@ -208,7 +204,7 @@ char *get_user_lua_configs(arena_t *arena) {
     
     const char *suffix = "/edut";
     size_t len = strlen(applocaldata) + strlen(suffix);
-    configs_path = arena_alloc(arena, len + 1, 1);
+    configs_path = new char[len+1]();
     snprintf(configs_path, len + 1, "%s%s", applocaldata, suffix);
     return configs_path;
   }
@@ -219,7 +215,7 @@ char *get_user_lua_configs(arena_t *arena) {
   if(xdg_env != NULL && strcmp(xdg_env, "") != 0) {
     const char *suffix = "/edut";
     size_t len = strlen(xdg_env) + strlen(suffix);
-    configs_path = (char*)arena_alloc(arena, len + 1, 1);
+    configs_path = new char[len+1]();
     sprintf(configs_path, "%s%s", xdg_env, suffix);
     return configs_path;
   }
@@ -231,7 +227,7 @@ char *get_user_lua_configs(arena_t *arena) {
 
   const char *suffix = "/.config/edut";
   size_t len = strlen(home_folder) + strlen(suffix);
-  configs_path = (char*)arena_alloc(arena, len + 1, 1);
+  configs_path = new char[len+1]();
   sprintf(configs_path, "%s%s", home_folder, suffix);
 
   return configs_path;
@@ -252,9 +248,8 @@ lua_State *load_user_configs() {
 
   char *user_configs_folder;
   char *init_file_path;
-  
-  arena_t *arena = arena_new(KB(1));
-  if((user_configs_folder = get_user_lua_configs(arena)) == NULL) {
+   
+  if((user_configs_folder = get_user_lua_configs()) == NULL) {
     puts("Couldn't find your configs folder.");
     lua_close(L);
     return NULL;
@@ -279,17 +274,19 @@ lua_State *load_user_configs() {
 
   const char *suffix = "/init.lua";
   size_t len = strlen(user_configs_folder) + strlen(suffix);
-  init_file_path = (char*)arena_alloc(arena, len + 1, 1);
+  init_file_path = new char[len + 1]();
   sprintf(init_file_path, "%s%s", user_configs_folder, suffix);
 
   if(luaL_dofile(L, init_file_path) != LUA_OK) {
     puts(lua_tostring(L, -1));
-    arena_destroy(arena);
+    delete init_file_path;
+    delete user_configs_folder;
     lua_close(L);
     return NULL;
   }
 
-  arena_destroy(arena);
+  delete init_file_path;
+  delete user_configs_folder;
   return L;
 }
 
