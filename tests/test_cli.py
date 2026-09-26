@@ -169,6 +169,30 @@ require "edut".setup {commands = {{"%s",
                 self.assertIn("flag:" + value, output)
                 self.assertIn("positional:" + value, output)
 
+    def test_lua_argument_lookup(self):
+        self.config.write_text('''
+require "edut".setup {commands = {{"lookup", flags = {"--switch", ["--value"] = 1},
+  execute = function(input)
+    assert(input.contains_flag("--switch"))
+    assert(not input.contains_flag("--missing"))
+    assert(input.get_argument("--switch", 1) == nil)
+    assert(input.get_argument("--value", 1) == "first")
+    assert(input.get_argument(1) == "positional")
+    for _, index in ipairs({-1, 0, 2, math.maxinteger or 9007199254740991}) do
+      assert(input.get_argument("--value", index) == nil)
+      assert(input.get_argument(index) == nil)
+    end
+    local ok, message = pcall(input.get_argument, "--missing", 1)
+    assert(not ok and message:find("Unknown flag", 1, true))
+    ok, message = pcall(input.get_argument, {})
+    assert(not ok and message:find("Invalid argument", 1, true))
+    assert(not pcall(input.get_argument, "--value", "invalid"))
+    print("EXECUTED")
+  end,
+}}}
+''')
+        self.run_cli("lookup", "--switch", "--value=first", "--value=second", "positional")
+
     def test_required_values(self):
         for args in (
             ("--output-file=",), ("--pair", "first"), ("--pair=first",),

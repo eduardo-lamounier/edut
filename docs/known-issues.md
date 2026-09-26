@@ -65,13 +65,6 @@ closed. Earlier reclamation of replaced and failed registrations still needs a
 lifetime policy that accounts for retained Lua wrappers. Configuration paths now
 use automatic string storage.
 
-### Incomplete public declarations
-
-`include/command.h` declares `pop_lua_parsedinput` and
-`parsedinput_containsflag`, but neither has an implementation. Its comment about
-checking multiple flags also differs from the actual Lua behavior. Reconcile the
-header with the supported API before building on these declarations.
-
 ## Documentation and verification
 
 The Lua configuration API still needs a dedicated reference with command schemas,

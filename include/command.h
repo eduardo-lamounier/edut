@@ -8,7 +8,6 @@
 extern "C" {
   #include <lua.h>
 }
-#include <stdbool.h>
 
 #define MAX_FLAGS 20     
 #define MAX_SUBCOMMANDS 10
@@ -49,12 +48,6 @@ void free_parsed_input(parsed_input_t *parsed_input);
 parsed_input_t *parse_input(std::span<const std::string> args);
 
 void push_lua_parsedinput(lua_State *L, parsed_input_t *parsed_input);
-parsed_input_t *pop_lua_parsedinput(lua_State *L);
-
-// Can receive multiple flags to check for, returning whether
-// any of them are contained in the parsed input
-bool parsedinput_containsflag(parsed_input_t parsed_input, const std::string& flag);
-
 int l_parsedinput_getsubcommand(lua_State *L);
 int l_parsedinput_forsubcommand(lua_State *L);
 int l_parsedinput_containsflag(lua_State *L);

@@ -77,8 +77,7 @@ in a disposable directory when testing.
 - Lua callback errors do not reliably propagate to the process exit status.
   Script command strings lack shell quoting, and pipelines can mask failures.
 - Command trees from replaced or failed registrations remain until process exit.
-  Some header declarations have no
-  implementation, and API documentation is minimal.
+  API documentation is minimal.
 
 See `docs/known-issues.md` for details on remaining problems. Value-taking flags
 accept separate and attached values; Lua lookups use the registered flag name.

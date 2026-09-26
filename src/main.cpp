@@ -43,53 +43,49 @@ static size_t flag_name_length(const std::string& name) {
 // The 'commands' table must be ALREADY in the stack.
 void register_command(lua_State *L, std::vector<command_t>& commands, int idx) {
   int stack = lua_gettop(L);
-  commands[idx] = command_t{};
+  command_t& command = commands[idx];
 
   lua_rawgeti(L, -1, idx+1);
 
   lua_rawgeti(L, -1, 1);
-  commands[idx].name = luaL_checkstring(L, -1);
+  command.name = luaL_checkstring(L, -1);
   lua_pop(L, 1);
 
   lua_getfield(L, -1, "flags");
-  if(!lua_isnil(L, -1) && lua_istable(L, -1)) {
+  if(lua_istable(L, -1)) {
     lua_pushnil(L);
     while(lua_next(L, -2) != 0) {
-      if(commands[idx].flags.size() >= MAX_FLAGS)
+      if(command.flags.size() >= MAX_FLAGS)
         luaL_error(L, "Too many flags for command '%s' (maximum %d)",
-          commands[idx].name.c_str(), MAX_FLAGS);
+          command.name.c_str(), MAX_FLAGS);
 
-      size_t flag_idx = commands[idx].flags.size();
+      size_t flag_idx = command.flags.size();
 
-      commands[idx].flags.emplace_back();
-      std::string& flag_text = commands[idx].flags[flag_idx].text;
-      size_t flag_arguments_amount;
+      command.flags.emplace_back();
+      flag_t& flag = command.flags.back();
       
       if(lua_isnumber(L, -2) && lua_isstring(L, -1)) {
-        flag_text = lua_tostring(L, -1);
-        flag_arguments_amount = 0;
+        flag.text = lua_tostring(L, -1);
+        flag.arguments_amount = 0;
       } else if(lua_isstring(L, -2) && lua_isnumber(L, -1)) {
-        flag_text = lua_tostring(L, -2);
+        flag.text = lua_tostring(L, -2);
         lua_Integer count = luaL_checkinteger(L, -1);
         if(count < 0 || count > MAX_ARGUMENTS || count != lua_tonumber(L, -1))
           luaL_error(L, "Flag '%s' must accept between 0 and %d arguments",
-            flag_text.c_str(), MAX_ARGUMENTS);
-        flag_arguments_amount = (size_t)count;
+            flag.text.c_str(), MAX_ARGUMENTS);
+        flag.arguments_amount = (size_t)count;
       } else {
         luaL_error(L, "Expected name of a flag, or name of flag (key) and"
           "then its number of arguments (value)");
-        exit(1);
       }
 
-      const std::string& name = commands[idx].flags[flag_idx].text;
+      const std::string& name = flag.text;
       size_t name_len = flag_name_length(name);
       for(size_t i = 0; i < flag_idx; i++) {
-        const std::string& other = commands[idx].flags[i].text;
+        const std::string& other = command.flags[i].text;
         if(name_len == flag_name_length(other) && name.compare(0, name_len, other, 0, name_len) == 0)
           luaL_error(L, "Ambiguous flag names '%s' and '%s'", name.c_str(), other.c_str());
       }
-
-      commands[idx].flags[flag_idx].arguments_amount = flag_arguments_amount;
 
       lua_pop(L, 1);
     }
@@ -97,26 +93,26 @@ void register_command(lua_State *L, std::vector<command_t>& commands, int idx) {
   lua_pop(L, 1);
 
   lua_getfield(L, -1, "subcommands");
-  if(!lua_isnil(L, -1) && lua_istable(L, -1)) {
+  if(lua_istable(L, -1)) {
     lua_len(L, -1);
     size_t subcommands_amount = lua_tointeger(L, -1);
     lua_pop(L, 1);
 
     if(subcommands_amount > MAX_SUBCOMMANDS)
       luaL_error(L, "Too many subcommands for command '%s' (maximum %d)",
-        commands[idx].name.c_str(), MAX_SUBCOMMANDS);
+        command.name.c_str(), MAX_SUBCOMMANDS);
 
-    commands[idx].sub_commands.resize(subcommands_amount);
+    command.sub_commands.resize(subcommands_amount);
 
-    for(size_t j = 0; j < commands[idx].sub_commands.size(); j++)
-      register_command(L, commands[idx].sub_commands, j);
+    for(size_t j = 0; j < command.sub_commands.size(); j++)
+      register_command(L, command.sub_commands, j);
   }
   lua_pop(L, 1);
 
   lua_getfield(L, -1, "execute");
   luaL_checktype(L, -1, LUA_TFUNCTION);
 
-  commands[idx].execute_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  command.execute_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
   lua_settop(L, stack);
 }
@@ -154,9 +150,7 @@ int l_setup(lua_State *L) {
 
 // Reports and error message. Does NOT terminate the program.
 void report_error(const std::string& msg) {
-  printf("\033[31m");
-  std::cout << "ERROR: " << msg;
-  printf("\033[m\n");
+  std::cout << "\033[31mERROR: " << msg << "\033[m\n";
 }
 
 // Reports an error message and terminates the program.
@@ -170,8 +164,7 @@ void throw_error(const std::string& msg) {
 // Reports an specified error message, but differently
 // from 'err', does not terminate the program.
 int l_report(lua_State *L) {
-  std::string msg(luaL_checkstring(L, 1));
-  report_error(msg);
+  report_error(luaL_checkstring(L, 1));
   return 0;
 }
 
@@ -197,35 +190,19 @@ static const struct luaL_Reg edut_api [] = {
 // Returns the config directory's path if it's found, 
 // std::nullopt otherwise.
 std::optional<std::string> get_user_lua_configs() {
-  std::string configs_path;
-
 #ifdef _WIN32
-  {
-    const char *applocaldata = getenv("LOCALAPPDATA");
-
-    if(applocaldata == NULL || applocaldata[0] == '\0')
-      return std::nullopt;
-    
-    configs_path = std::string(applocaldata) + "/edut";
-    return configs_path;
-  }
-#endif
-
+  const char *applocaldata = getenv("LOCALAPPDATA");
+  if(applocaldata == NULL || applocaldata[0] == '\0') return std::nullopt;
+  return std::string(applocaldata) + "/edut";
+#else
   const char *xdg_env = getenv("XDG_CONFIG_HOME");
-
-  if(xdg_env != NULL && xdg_env[0] != '\0') {
-    configs_path = std::string(xdg_env) + "/edut";
-    return configs_path;
-  }
+  if(xdg_env != NULL && xdg_env[0] != '\0')
+    return std::string(xdg_env) + "/edut";
 
   const char *home_folder = getenv("HOME");
-
-  if(home_folder == NULL || home_folder[0] == '\0')
-    return std::nullopt;
-
-  configs_path = std::string(home_folder) + "/.config/edut";
-
-  return configs_path;
+  if(home_folder == NULL || home_folder[0] == '\0') return std::nullopt;
+  return std::string(home_folder) + "/.config/edut";
+#endif
 }
 
 // Implementation of 'require("edut")'
@@ -242,7 +219,6 @@ lua_State *load_user_configs() {
   lua_State *L = luaL_newstate(); 
 
   auto user_configs_folder = get_user_lua_configs();
-  std::string init_file_path;
    
   if(!user_configs_folder.has_value()) {
     puts("Couldn't find your configs folder.");
@@ -267,7 +243,7 @@ lua_State *load_user_configs() {
 
   lua_pop(L, 2);
 
-  init_file_path = *user_configs_folder + "/init.lua";
+  std::string init_file_path = *user_configs_folder + "/init.lua";
 
   if(luaL_dofile(L, init_file_path.c_str()) != LUA_OK) {
     puts(lua_tostring(L, -1));
@@ -293,8 +269,8 @@ int main(int argc, char **argv) {
     }
   }
 
-  lua_State *L;
-  if((L = load_user_configs()) == NULL) 
+  lua_State *L = load_user_configs();
+  if(L == NULL)
     return EXIT_FAILURE;
 
   if(argc == 1) {

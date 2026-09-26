@@ -1,8 +1,9 @@
-#include<iostream>
+#include<stdio.h>
+#include<memory>
+#include<string_view>
 #include<optional>
 
 extern "C" {
-  #include<stdlib.h>
   #include<lauxlib.h>
 }
 
@@ -27,35 +28,29 @@ command_t *command_withname(const std::string& name) {
 // Returns NULL if the command does not contain a subcommand
 // with the specified name.
 command_t *get_subcommand_of(command_t& command, const std::string& name) {
-  for(size_t i = 0; i < command.sub_commands.size(); i++)
-    if(command.sub_commands[i].name == name)
-      return &command.sub_commands[i];
+  for(auto& subcommand : command.sub_commands)
+    if(subcommand.name == name) return &subcommand;
 
   return NULL;
 }
 
-// Searches for a flag of a specific command.
-//
-// The index of the found flag is returned with the 'out_idx' out
-// parameter.
-//
-// Returns `true` if the command contains the specified flag,
-// `false` otherwise.
-bool find_flag(const command_t& command, const std::string& name, size_t *out_idx) {
-  for(size_t i = 0; i < command.flags.size(); i++)
-    if(command.flags[i].text == name) {
-      *out_idx = i;
-      return true;
-    }
+// Returns the first matching flag's index, or no value if it is absent.
+static std::optional<size_t> find_flag(std::span<const flag_t> flags,
+    std::string_view name) {
+  for(size_t i = 0; i < flags.size(); i++)
+    if(flags[i].text == name) return i;
 
-  return false;
+  return std::nullopt;
 }
 
 // Preserve the registered flag name while accepting an attached first value.
 static bool find_input_flag(const command_t& command, const std::string& text, size_t *out_idx,
     std::optional<std::string> *inline_value) {
   inline_value->reset();
-  if(find_flag(command, text, out_idx)) return true;
+  if(auto idx = find_flag(command.flags, text)) {
+    *out_idx = *idx;
+    return true;
+  }
 
   size_t prefix = text.find('=');
   if(prefix == std::string::npos) return false;
@@ -75,8 +70,7 @@ static bool find_input_flag(const command_t& command, const std::string& text, s
 
 static bool missing_flag_arguments(parsed_input_t *input) {
   if(input->flags.empty()) return false;
-  size_t idx = input->flags.size() - 1;
-  return input->flags_arguments[idx].size() < input->flags[idx].arguments_amount;
+  return input->flags_arguments.back().size() < input->flags.back().arguments_amount;
 }
 
 // Header defined functions
@@ -149,53 +143,35 @@ void free_parsed_input(parsed_input_t *parsed_input) {
 //
 // Returns NULL for parsing errors
 parsed_input_t *parse_input(std::span<const std::string> args) {
-  parsed_input_t *parsed_input = new parsed_input_t();
+  if(args.empty()) return NULL;
+  command_t *command = command_withname(args.front());
+  if(command == NULL) return NULL;
 
-  if(parsed_input == NULL) return NULL;
- 
-  // Tracking pointer for the inner-most parsed_input
-  // where the subcommands, arguments and flags will be
-  // added
-  parsed_input_t *current = parsed_input;
+  // Release the entire chain automatically if parsing fails.
+  std::unique_ptr<parsed_input_t, decltype(&free_parsed_input)> parsed_input(
+    new parsed_input_t(), free_parsed_input);
+  parsed_input->command = command;
+  parsed_input_t *current = parsed_input.get();
 
-  for(size_t i = 0; i < args.size(); i++) {
-    if(parsed_input->command == NULL) {
-      command_t *command = command_withname(args[i]);
-      
-      if(command == NULL) {
-        free_parsed_input(parsed_input);
-        return NULL;
-      }
-
-      current->command = command;
-      continue;
-    }
-
-    command_t *subcommand = get_subcommand_of(*current->command, args[i]);
+  for(const auto& arg : args.subspan(1)) {
+    command_t *subcommand = get_subcommand_of(*current->command, arg);
     size_t command_flag_idx;
     std::optional<std::string> inline_value;
-    bool is_flag = find_input_flag(*current->command, args[i],
+    bool is_flag = find_input_flag(*current->command, arg,
       &command_flag_idx, &inline_value);
 
     if(missing_flag_arguments(current)) {
-      if(subcommand != NULL || is_flag || args[i].starts_with("--")) {
+      if(subcommand != NULL || is_flag || arg.starts_with("--")) {
         printf("Missing arguments for flag '%s'.\n",
           current->flags.back().text.c_str());
-        free_parsed_input(parsed_input);
         return NULL;
       }
-      size_t idx = current->flags.size() - 1;
-      current->flags_arguments[idx].push_back(args[i]);
+      current->flags_arguments.back().push_back(arg);
       continue;
     }
 
     if(subcommand != NULL) {
       current->for_subcommand = new parsed_input_t();
-
-      if(current->for_subcommand == NULL) {
-        free_parsed_input(parsed_input);
-        return NULL;
-      }
 
       current = current->for_subcommand;
       current->command = subcommand;
@@ -204,7 +180,6 @@ parsed_input_t *parse_input(std::span<const std::string> args) {
 
     if(is_flag) {
       if(current->flags.size() >= MAX_FLAGS) {
-        free_parsed_input(parsed_input);
         return NULL;
       }
       
@@ -216,33 +191,25 @@ parsed_input_t *parse_input(std::span<const std::string> args) {
       continue;
     }
     
-    if(args[i].starts_with("--")) {
-      printf("Invalid flag '%s' passed to command '%s'.\n", args[i].c_str(), current->command->name.c_str());
-      free_parsed_input(parsed_input);
+    if(arg.starts_with("--")) {
+      printf("Invalid flag '%s' passed to command '%s'.\n", arg.c_str(), current->command->name.c_str());
       return NULL;
     }
 
     if(current->direct_arguments.size() >= MAX_ARGUMENTS) {
       printf("Too many positional arguments for command '%s'.\n", current->command->name.c_str());
-      free_parsed_input(parsed_input);
       return NULL;
     }
-    current->direct_arguments.push_back(args[i]);
-  }
-
-  if(parsed_input->command == NULL) {
-    free_parsed_input(parsed_input);
-    return NULL;
+    current->direct_arguments.push_back(arg);
   }
 
   if(missing_flag_arguments(current)) {
     printf("Missing arguments for flag '%s'.\n",
       current->flags.back().text.c_str());
-    free_parsed_input(parsed_input);
     return NULL;
   }
 
-  return parsed_input;
+  return parsed_input.release();
 }
 
 // Pushes a parsed_input to the lua stack
@@ -307,14 +274,7 @@ int l_parsedinput_containsflag(lua_State *L) {
 
   const char *flag = luaL_checkstring(L, 1);
 
-  bool contains_flag = false;
-  for(size_t i = 0; i < parsed_input->flags.size(); i++)
-    if(parsed_input->flags[i].text == flag) {
-      contains_flag = true;
-      break;
-    }
-
-  lua_pushboolean(L, contains_flag);
+  lua_pushboolean(L, find_flag(parsed_input->flags, flag).has_value());
   return 1;
 }
 
@@ -324,50 +284,28 @@ int l_parsedinput_getargument(lua_State *L) {
   parsed_input_t *parsed_input =
     (parsed_input_t*)lua_touserdata(L, lua_upvalueindex(1));
 
-  // Borrow Lua strings: luaL_error may jump past C++ destructors.
-  const char *flag_text;
+  const std::vector<std::string> *arguments;
   lua_Integer argument_index;
 
   if(lua_type(L, 1) == LUA_TSTRING) {
-    flag_text = luaL_checkstring(L, 1);
+    // Borrow Lua strings: luaL_error may jump past C++ destructors.
+    const char *flag_text = luaL_checkstring(L, 1);
     argument_index = luaL_checkinteger(L, 2);
+    auto flag_idx = find_flag(parsed_input->flags, flag_text);
+    if(!flag_idx)
+      return luaL_error(L, "Unknown flag passed for this command."
+        "\nIt's possible to check whether the flag exists with 'contains_flag'.");
+    arguments = &parsed_input->flags_arguments[*flag_idx];
   } else if(lua_type(L, 1) == LUA_TNUMBER) {
-    flag_text = NULL;
     argument_index = luaL_checkinteger(L, 1);
+    arguments = &parsed_input->direct_arguments;
   } else
     return luaL_error(L, "Invalid argument passed for function 'get_argument'."
       "\nExpected a string or a number as first parameter.");
 
-  if(flag_text == NULL) {
-    if(argument_index < 1 ||
-        (lua_Unsigned)argument_index > parsed_input->direct_arguments.size()) {
-      lua_pushnil(L);
-      return 1;
-    }
-    lua_pushstring(L, parsed_input->direct_arguments[argument_index-1].c_str());
-    return 1;
-  }
-
-  size_t flag_idx;
-  bool found_flag = false;
-  for(size_t i = 0; i < parsed_input->flags.size(); i++)
-    if(parsed_input->flags[i].text == flag_text) {
-      flag_idx = i;
-      found_flag = true;
-      break;
-    }
-
-  if(!found_flag)
-    return luaL_error(L, "Unknown flag passed for this command."
-      "\nIt's possible to check whether the flag exists with 'contains_flag'.");
-
-  flag_t *flag = &parsed_input->flags[flag_idx];
-
-  if(argument_index < 1 || (lua_Unsigned)argument_index > flag->arguments_amount) {
+  if(argument_index < 1 || (lua_Unsigned)argument_index > arguments->size())
     lua_pushnil(L);
-    return 1;
-  }
-
-  lua_pushstring(L, parsed_input->flags_arguments[flag_idx][argument_index-1].c_str());
+  else
+    lua_pushstring(L, (*arguments)[argument_index-1].c_str());
   return 1;
 }
