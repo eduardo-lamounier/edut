@@ -51,8 +51,8 @@ use automatic string storage.
 
 ## Documentation and verification
 
-The Lua configuration API still needs a dedicated reference with command schemas,
-callback examples, dispatch behavior, and error contracts. Regression tests now
+The [configuration guide](configuration.md) covers basic command definitions,
+input lookup, dispatch, and errors. A complete Lua API reference is still needed. Regression tests now
 cover configuration fallback, registration limits, and argument parsing on Unix,
 along with callback failure propagation and disposable script execution tests.
 Native Windows behavior and the entire Lua API are not covered. Extend coverage alongside changes to those areas.
