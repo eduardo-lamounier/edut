@@ -15,7 +15,7 @@ Each remaining subcommand needs defined behavior and validation before use.
 ### Help flag mismatch
 
 The Lua help handler calls `contains_flag("--help", "-h")`, but
-`l_parsedinput_containsflag` in `src/command.c` checks only its first argument.
+`l_parsedinput_containsflag` in `src/lua_api.cpp` checks only its first argument.
 Consequently, `-h` is parsed but does not display help. Either support multiple
 names in the API or check each separately in Lua. The help handler also continues
 to print “No subcommand passed” after displaying help.
@@ -38,17 +38,17 @@ exit status where execution is synchronous.
 
 ### Platform support
 
-Although the C loader now uses `LOCALAPPDATA` on Windows, the Lua script manager
+Although the C++ loader now uses `LOCALAPPDATA` on Windows, the Lua script manager
 still locates scripts using `XDG_CONFIG_HOME` or `HOME`. It also assumes Bash,
 `tput`, `tee`, and Unix redirection. CMake passes GCC-style compiler options
 unconditionally. Windows configuration discovery alone does not establish full
 Windows support; the script manager and native build need separate validation.
 
-## C runtime and Lua boundary
+## C++ runtime and Lua boundary
 
 ### Callback errors can return success
 
-`command_execute` in `src/command.c` prints errors from `lua_pcall`, then returns
+`command_execute` in `src/lua_api.cpp` prints errors from `lua_pcall`, then returns
 without propagating a failure status. `main` consequently returns success, and
 nested callback failures can also be swallowed. Return or propagate execution
 failures through both top-level and subcommand dispatch. Configuration-load

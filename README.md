@@ -1,6 +1,6 @@
 # edut
 
-A command-line framework that lets users define CLI commands, arguments, and behavior in Lua while relying on a C runtime for parsing and execution.
+A command-line framework that lets users define CLI commands, arguments, and behavior in Lua while relying on a C++ runtime for parsing and execution.
 
 ## Installation
 
@@ -14,6 +14,9 @@ Firstly clone it:
 git clone https://github.com/eduardo-lamounier/edut
 cd edut
 ```
+
+Building from source requires CMake, a compiler supporting C++23, and Lua
+development headers and libraries.
 
 The project can then be built and compiled with CMake:
 ```
@@ -43,7 +46,7 @@ There you can also make your own changes.
 ## Built-in options
 
 - `edut --help` or `edut -h`: describe the application and show usage.
-- `edut --version` or `edut -v`: print `edut 1.0.0`.
+- `edut --version` or `edut -v`: print `edut 1.0.1`.
 
 These options exit successfully without loading Lua configuration, so they also
 work when configuration is missing or invalid. They apply as the first argument;
@@ -68,6 +71,20 @@ For example, declaring both `--output` and `--output=` is rejected because
 `--output=file.txt` would otherwise be ambiguous.
 
 ## Development
+
+The C++ code is organized by responsibility:
+
+- `src/main.cpp`: built-in options and application startup/shutdown.
+- `src/parser.cpp`: argument parsing and command/flag lookup, independent of Lua.
+- `src/lua_api.cpp`: Lua API, registration ownership, wrappers, and execution.
+- `src/config.cpp`: configuration discovery and loading.
+- `include/command.hpp`: shared command and flag definitions. The other `.hpp`
+  headers expose the corresponding modules' interfaces.
+
+Names and arguments use `std::string`, and command and argument collections use
+vectors. Command and flag names no longer have a 20-character limit; flag,
+subcommand, and argument counts still have explicit limits. Registration trees
+remain alive until process exit so retained Lua wrappers keep valid pointers.
 
 After building, run the CLI regression tests on Unix with Python 3:
 
