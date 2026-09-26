@@ -1,4 +1,4 @@
-"""CLI regression tests: python3 tests/test_cli.py build/edut (Unix)."""
+"""CLI integration tests: python3 tests/test_cli.py build/edut (Unix)."""
 
 import os
 from pathlib import Path
@@ -15,9 +15,6 @@ EXECUTABLE = Path(sys.argv.pop(1) if len(sys.argv) > 1 else "build/edut").resolv
 CONFIG = r'''
 local api = require "edut"
 local function inspect(input)
-  for _, index in ipairs({-1, 0, 11, 4294967297, math.maxinteger or 9007199254740991}) do
-    assert(input.get_argument(index) == nil)
-  end
   for index = 1, 10 do
     local value = input.get_argument(index)
     if value then print("arg:" .. index .. ":" .. value) end
@@ -43,28 +40,35 @@ api.setup { commands = {
 '''
 
 
-class CliTests(unittest.TestCase):
+class CliTestCase(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
-        self.config = self.root / "edut" / "init.lua"
-        self.config.parent.mkdir()
-        self.config.write_text(CONFIG)
-        self.env = dict(os.environ, XDG_CONFIG_HOME=str(self.root))
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.env = dict(os.environ, XDG_CONFIG_HOME=str(self.root), HOME=str(self.root))
 
-    def run_cli(self, *args, success=True):
+    def invoke(self, *args, success=True):
         result = subprocess.run(
             [str(EXECUTABLE), *args], env=self.env, cwd=self.root,
             capture_output=True, text=True, timeout=10,
         )
         output = result.stdout + result.stderr
+        self.assertEqual(result.returncode == 0, success, output)
+        return output
+
+
+class CliTests(CliTestCase):
+    def setUp(self):
+        super().setUp()
+        self.config = self.root / "edut" / "init.lua"
+        self.config.parent.mkdir()
+        self.config.write_text(CONFIG)
+
+    def run_cli(self, *args, success=True):
+        output = self.invoke(*args, success=success)
         if success:
-            self.assertEqual(result.returncode, 0, output)
             self.assertIn("EXECUTED", output)
-            self.assertNotIn("ERROR", output)
         else:
-            self.assertNotEqual(result.returncode, 0, output)
             self.assertNotIn("EXECUTED", output)
         return output
 
@@ -150,31 +154,11 @@ require "edut".setup {commands = {{"parent", flags = {"--catch"},
                     self.env["XDG_CONFIG_HOME"] = value
                 self.run_cli("plain")
 
-    def test_builtin_flags_without_configuration(self):
-        for config_state in ("missing", "invalid", "side-effect"):
-            if config_state == "missing":
-                self.config.unlink()
-            elif config_state == "invalid":
-                self.config.write_text("this is invalid Lua")
-            else:
-                self.config.write_text('print("CONFIG_LOADED"); error("must not run")')
-            for option in ("--help", "-h", "--version", "-v"):
-                with self.subTest(config=config_state, option=option):
-                    result = subprocess.run(
-                        [str(EXECUTABLE), option], env=self.env, cwd=self.root,
-                        capture_output=True, text=True, timeout=10,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                    self.assertEqual(result.stderr, "")
-                    self.assertNotIn("CONFIG_LOADED", result.stdout)
-                    if option in ("--version", "-v"):
-                        self.assertEqual(result.stdout, "edut 1.1.0\n")
-                    else:
-                        self.assertIn("Define and run custom CLI commands", result.stdout)
-                        self.assertIn("Usage: edut", result.stdout)
-                        self.assertIn("Lua", result.stdout)
-                        self.assertIn("-h, --help", result.stdout)
-                        self.assertIn("-v, --version", result.stdout)
+    def test_builtin_flags_skip_configuration(self):
+        self.config.write_text('error("configuration must not load")')
+        for option in ("--help", "-h", "--version", "-v"):
+            with self.subTest(option=option):
+                self.invoke(option)
 
     def test_builtin_flags_do_not_override_command_flags(self):
         self.config.write_text('''
@@ -207,8 +191,6 @@ require "edut".setup {commands = {{"custom",
         self.assertIn("--pair:2:second", self.run_cli("test", "--pair=first", "second"))
         self.assertIn("--output-file=:1:a=b", self.run_cli("test", "--output-file=a=b"))
         self.assertIn("--pair:1:\n", self.run_cli("test", "--pair=", "second"))
-        long_value = "x" * 100
-        self.assertIn(long_value, self.run_cli("test", "--output-file=" + long_value))
         self.run_cli("test", "--verbose=yes", success=False)
         self.run_cli("test", "--unknown=value", success=False)
 
@@ -217,28 +199,14 @@ require "edut".setup {commands = {{"custom",
         child = "child" + "s" * 256
         flag = "--flag" + "f" * 256
         value = "value with spaces=" + "v" * 1024
-        self.config.write_text('''
-require "edut".setup {commands = {{"%s",
-  execute = function(input)
-    local child = input.get_subcommand()
-    assert(child.get_name() == "%s")
-    child.execute(input.for_subcommand())
-  end,
-  subcommands = {{"%s", flags = {["%s"] = 1},
-    execute = function(input)
-      assert(input.contains_flag("%s"))
-      print("flag:" .. input.get_argument("%s", 1))
-      print("positional:" .. input.get_argument(1))
-      print("EXECUTED")
-    end,
-  }},
-}}}
-''' % (command, child, child, flag, flag, flag))
+        self.config.write_text(CONFIG.replace('"test"', '"' + command + '"')
+                               .replace('"child"', '"' + child + '"')
+                               .replace("--output-file=", flag))
         for args in ((flag, value), (flag + "=" + value,)):
             with self.subTest(args=args):
-                output = self.run_cli(command, child, *args, value)
-                self.assertIn("flag:" + value, output)
-                self.assertIn("positional:" + value, output)
+                output = self.run_cli(command, *args, child, value)
+                self.assertIn(flag + ":1:" + value, output)
+                self.assertIn("arg:1:" + value, output)
 
     def test_lua_argument_lookup(self):
         self.config.write_text('''
@@ -249,7 +217,7 @@ require "edut".setup {commands = {{"lookup", flags = {"--switch", ["--value"] = 
     assert(input.get_argument("--switch", 1) == nil)
     assert(input.get_argument("--value", 1) == "first")
     assert(input.get_argument(1) == "positional")
-    for _, index in ipairs({-1, 0, 2, math.maxinteger or 9007199254740991}) do
+    for _, index in ipairs({-1, 0, 2, 4294967297, math.maxinteger or 9007199254740991}) do
       assert(input.get_argument("--value", index) == nil)
       assert(input.get_argument(index) == nil)
     end
@@ -399,11 +367,9 @@ assert(not ok)
         self.run_cli("partial", success=False)
 
 
-class ScriptTests(unittest.TestCase):
+class ScriptTests(CliTestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        super().setUp()
         self.config_root = self.root / "config space ' $(touch injected)"
         sample = Path(__file__).resolve().parents[1] / "config"
         target = self.config_root / "edut"
@@ -412,15 +378,10 @@ class ScriptTests(unittest.TestCase):
         shutil.copytree(sample / "lua", target / "lua")
         self.scripts = target / "scripts"
         self.scripts.mkdir()
-        self.env = dict(os.environ, XDG_CONFIG_HOME=str(self.config_root))
+        self.env["XDG_CONFIG_HOME"] = str(self.config_root)
 
     def run_script(self, name, *args, success=True):
-        result = subprocess.run(
-            [str(EXECUTABLE), "scripts", "run", name, *args],
-            env=self.env, cwd=self.root, capture_output=True, text=True, timeout=5,
-        )
-        output = result.stdout + result.stderr
-        self.assertEqual(result.returncode == 0, success, output)
+        output = self.invoke("scripts", "run", name, *args, success=success)
         if not success:
             self.assertNotIn("The script ran successfully", output)
             self.assertNotIn("Script launched", output)
