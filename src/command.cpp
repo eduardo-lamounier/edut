@@ -1,5 +1,7 @@
+#include<iostream>
+#include<optional>
+
 extern "C" {
-  #include<string.h>
   #include<stdlib.h>
   #include<lauxlib.h>
 }
@@ -12,9 +14,9 @@ command_t *commands;
 // Helper functions
 
 // Searches for a command with a specific name.
-command_t *command_withname(const char *name) {
+command_t *command_withname(const std::string& name) {
   for(size_t i = 0; i < registered_commands_amount; i++)
-    if(strcmp(commands[i].name, name) == 0)
+    if(commands[i].name == name)
       return commands + i;
 
   return NULL;
@@ -24,9 +26,9 @@ command_t *command_withname(const char *name) {
 //
 // Returns NULL if the command does not contain a subcommand
 // with the specified name.
-command_t *get_subcommand_of(command_t command, const char *name) {
+command_t *get_subcommand_of(const command_t& command, const std::string& name) {
   for(size_t i = 0; i < command.subcommands_amount; i++)
-    if(strcmp(command.sub_commands[i].name, name) == 0)
+    if(command.sub_commands[i].name == name)
       return command.sub_commands + i;
 
   return NULL;
@@ -39,9 +41,9 @@ command_t *get_subcommand_of(command_t command, const char *name) {
 //
 // Returns `true` if the command contains the specified flag,
 // `false` otherwise.
-bool find_flag(command_t command, const char *name, size_t *out_idx) {
+bool find_flag(const command_t& command, const std::string& name, size_t *out_idx) {
   for(size_t i = 0; i < command.flags_amount; i++)
-    if(strcmp(command.flags[i].text, name) == 0) {
+    if(command.flags[i].text == name) {
       *out_idx = i;
       return true;
     }
@@ -50,23 +52,21 @@ bool find_flag(command_t command, const char *name, size_t *out_idx) {
 }
 
 // Preserve the registered flag name while accepting an attached first value.
-static bool find_input_flag(command_t command, char *text, size_t *out_idx,
-    char **inline_value) {
-  *inline_value = NULL;
+static bool find_input_flag(const command_t& command, const std::string& text, size_t *out_idx,
+    std::optional<std::string> *inline_value) {
+  inline_value->reset();
   if(find_flag(command, text, out_idx)) return true;
 
-  char *equals = strchr(text, '=');
-  if(equals == NULL) return false;
-
-  size_t prefix = (size_t)(equals - text);
+  size_t prefix = text.find('=');
+  if(prefix == std::string::npos) return false;
   for(size_t i = 0; i < command.flags_amount; i++) {
-    flag_t *flag = &command.flags[i];
-    size_t len = strlen(flag->text);
+    const flag_t *flag = &command.flags[i];
+    size_t len = flag->text.size();
     if(flag->arguments_amount > 0 &&
         (len == prefix || (len == prefix + 1 && flag->text[prefix] == '=')) &&
-        strncmp(flag->text, text, prefix) == 0) {
+        flag->text.compare(0, prefix, text, 0, prefix) == 0) {
       *out_idx = i;
-      *inline_value = equals + 1;
+      *inline_value = text.substr(prefix + 1);
       return true;
     }
   }
@@ -133,7 +133,7 @@ int l_command_getname(lua_State *L) {
   command_t *command =
     (command_t*)lua_touserdata(L, lua_upvalueindex(1));
 
-  lua_pushstring(L, command->name);
+  lua_pushstring(L, command->name.c_str());
   return 1;
 }
 
@@ -148,7 +148,7 @@ void free_parsed_input(parsed_input_t *parsed_input) {
 // Parses the user input
 //
 // Returns NULL for parsing errors
-parsed_input_t *parse_input(char **args, int n) {
+parsed_input_t *parse_input(const std::string *args, int n) {
   parsed_input_t *parsed_input = new parsed_input_t();
 
   if(parsed_input == NULL) return NULL;
@@ -173,14 +173,14 @@ parsed_input_t *parse_input(char **args, int n) {
 
     command_t *subcommand = get_subcommand_of(*current->command, args[i]);
     size_t command_flag_idx;
-    char *inline_value;
+    std::optional<std::string> inline_value;
     bool is_flag = find_input_flag(*current->command, args[i],
       &command_flag_idx, &inline_value);
 
     if(missing_flag_arguments(current)) {
-      if(subcommand != NULL || is_flag || strncmp(args[i], "--", 2) == 0) {
+      if(subcommand != NULL || is_flag || args[i].starts_with("--")) {
         printf("Missing arguments for flag '%s'.\n",
-          current->flags[current->flags_amount - 1].text);
+          current->flags[current->flags_amount - 1].text.c_str());
         free_parsed_input(parsed_input);
         return NULL;
       }
@@ -210,22 +210,22 @@ parsed_input_t *parse_input(char **args, int n) {
       
       size_t idx = current->flags_amount;
       current->flags[idx] = current->command->flags[command_flag_idx];
-      if(inline_value != NULL) {
-        current->flags_arguments[idx][0] = inline_value;
+      if(inline_value.has_value()) {
+        current->flags_arguments[idx][0] = *inline_value;
         current->flags_arguments_amount[idx] = 1;
       }
       current->flags_amount++;
       continue;
     }
     
-    if(strncmp(args[i], "--", 2) == 0) {
-      printf("Invalid flag '%s' passed to command '%s'.\n", args[i], current->command->name);
+    if(args[i].starts_with("--")) {
+      printf("Invalid flag '%s' passed to command '%s'.\n", args[i].c_str(), current->command->name.c_str());
       free_parsed_input(parsed_input);
       return NULL;
     }
 
     if(current->direct_arguments_amount >= MAX_ARGUMENTS) {
-      printf("Too many positional arguments for command '%s'.\n", current->command->name);
+      printf("Too many positional arguments for command '%s'.\n", current->command->name.c_str());
       free_parsed_input(parsed_input);
       return NULL;
     }
@@ -239,7 +239,7 @@ parsed_input_t *parse_input(char **args, int n) {
 
   if(missing_flag_arguments(current)) {
     printf("Missing arguments for flag '%s'.\n",
-      current->flags[current->flags_amount - 1].text);
+      current->flags[current->flags_amount - 1].text.c_str());
     free_parsed_input(parsed_input);
     return NULL;
   }
@@ -311,7 +311,7 @@ int l_parsedinput_containsflag(lua_State *L) {
 
   bool contains_flag = false;
   for(size_t i = 0; i < parsed_input->flags_amount; i++)
-    if(strcmp(flag, parsed_input->flags[i].text) == 0) {
+    if(parsed_input->flags[i].text == flag) {
       contains_flag = true;
       break;
     }
@@ -326,6 +326,7 @@ int l_parsedinput_getargument(lua_State *L) {
   parsed_input_t *parsed_input =
     (parsed_input_t*)lua_touserdata(L, lua_upvalueindex(1));
 
+  // Borrow Lua strings: luaL_error may jump past C++ destructors.
   const char *flag_text;
   lua_Integer argument_index;
 
@@ -345,14 +346,14 @@ int l_parsedinput_getargument(lua_State *L) {
       lua_pushnil(L);
       return 1;
     }
-    lua_pushstring(L, parsed_input->direct_arguments[argument_index-1]);
+    lua_pushstring(L, parsed_input->direct_arguments[argument_index-1].c_str());
     return 1;
   }
 
   size_t flag_idx;
   bool found_flag = false;
   for(size_t i = 0; i < parsed_input->flags_amount; i++)
-    if(strcmp(flag_text, parsed_input->flags[i].text) == 0) {
+    if(parsed_input->flags[i].text == flag_text) {
       flag_idx = i;
       found_flag = true;
       break;
@@ -369,6 +370,6 @@ int l_parsedinput_getargument(lua_State *L) {
     return 1;
   }
 
-  lua_pushstring(L, parsed_input->flags_arguments[flag_idx][argument_index-1]);
+  lua_pushstring(L, parsed_input->flags_arguments[flag_idx][argument_index-1].c_str());
   return 1;
 }

@@ -1,7 +1,11 @@
+#include<iostream>
+#include<string>
+#include<optional>
+#include<vector>
+
 #include<stdio.h>
 #include<assert.h>
 #include<stdlib.h>
-#include<string.h>
 extern "C" {
   #include<lauxlib.h>
   #include<lualib.h>
@@ -26,8 +30,8 @@ extern "C" {
 #define EDUT_VERSION "1.0.1"
 
 // A trailing '=' does not distinguish flags when parsing attached values.
-static size_t flag_name_length(const char *name) {
-  size_t len = strlen(name);
+static size_t flag_name_length(const std::string& name) {
+  size_t len = name.size();
   return len > 0 && name[len - 1] == '=' ? len - 1 : len;
 }
 
@@ -39,13 +43,12 @@ static size_t flag_name_length(const char *name) {
 // The 'commands' table must be ALREADY in the stack.
 void register_command(lua_State *L, command_t *commands, int idx) {
   int stack = lua_gettop(L);
-  memset(&commands[idx], 0, sizeof(commands[idx]));
+  commands[idx] = command_t{};
 
   lua_rawgeti(L, -1, idx+1);
 
   lua_rawgeti(L, -1, 1);
-  strncpy(commands[idx].name, luaL_checkstring(L, -1), MAX_COMMAND_NAME+1);
-  commands[idx].name[MAX_COMMAND_NAME] = '\0';
+  commands[idx].name = luaL_checkstring(L, -1);
   lua_pop(L, 1);
 
   lua_getfield(L, -1, "flags");
@@ -54,11 +57,11 @@ void register_command(lua_State *L, command_t *commands, int idx) {
     while(lua_next(L, -2) != 0) {
       if(commands[idx].flags_amount >= MAX_FLAGS)
         luaL_error(L, "Too many flags for command '%s' (maximum %d)",
-          commands[idx].name, MAX_FLAGS);
+          commands[idx].name.c_str(), MAX_FLAGS);
 
       size_t flag_idx = commands[idx].flags_amount;
 
-      const char *flag_text;
+      std::string& flag_text = commands[idx].flags[flag_idx].text;
       size_t flag_arguments_amount;
       
       if(lua_isnumber(L, -2) && lua_isstring(L, -1)) {
@@ -69,7 +72,7 @@ void register_command(lua_State *L, command_t *commands, int idx) {
         lua_Integer count = luaL_checkinteger(L, -1);
         if(count < 0 || count > MAX_ARGUMENTS || count != lua_tonumber(L, -1))
           luaL_error(L, "Flag '%s' must accept between 0 and %d arguments",
-            flag_text, MAX_ARGUMENTS);
+            flag_text.c_str(), MAX_ARGUMENTS);
         flag_arguments_amount = (size_t)count;
       } else {
         luaL_error(L, "Expected name of a flag, or name of flag (key) and"
@@ -77,15 +80,12 @@ void register_command(lua_State *L, command_t *commands, int idx) {
         exit(1);
       }
 
-      strncpy(commands[idx].flags[flag_idx].text, flag_text, MAX_FLAG_NAME+1);
-      commands[idx].flags[flag_idx].text[MAX_FLAG_NAME] = '\0';
-
-      const char *name = commands[idx].flags[flag_idx].text;
+      const std::string& name = commands[idx].flags[flag_idx].text;
       size_t name_len = flag_name_length(name);
       for(size_t i = 0; i < flag_idx; i++) {
-        const char *other = commands[idx].flags[i].text;
-        if(name_len == flag_name_length(other) && strncmp(name, other, name_len) == 0)
-          luaL_error(L, "Ambiguous flag names '%s' and '%s'", name, other);
+        const std::string& other = commands[idx].flags[i].text;
+        if(name_len == flag_name_length(other) && name.compare(0, name_len, other, 0, name_len) == 0)
+          luaL_error(L, "Ambiguous flag names '%s' and '%s'", name.c_str(), other.c_str());
       }
 
       commands[idx].flags[flag_idx].arguments_amount = flag_arguments_amount;
@@ -149,14 +149,14 @@ int l_setup(lua_State *L) {
 }
 
 // Reports and error message. Does NOT terminate the program.
-void report_error(const char *msg) {
+void report_error(const std::string& msg) {
   printf("\033[31m");
-  printf("ERROR: %s", msg);
+  std::cout << "ERROR: " << msg;
   printf("\033[m\n");
 }
 
 // Reports an error message and terminates the program.
-void throw_error(const char *msg) {
+void throw_error(const std::string& msg) {
   report_error(msg);
   exit(EXIT_FAILURE);
 }
@@ -166,7 +166,7 @@ void throw_error(const char *msg) {
 // Reports an specified error message, but differently
 // from 'err', does not terminate the program.
 int l_report(lua_State *L) {
-  const char *msg = luaL_checkstring(L, 1);
+  std::string msg(luaL_checkstring(L, 1));
   report_error(msg);
   return 0;
 }
@@ -191,44 +191,35 @@ static const struct luaL_Reg edut_api [] = {
 };
 
 // Returns the config directory's path if it's found, 
-// NULL otherwise.
-char *get_user_lua_configs() {
-  char *configs_path;
+// std::nullopt otherwise.
+std::optional<std::string> get_user_lua_configs() {
+  std::string configs_path;
 
 #ifdef _WIN32
   {
     const char *applocaldata = getenv("LOCALAPPDATA");
 
-    if(applocaldata == NULL || strcmp(applocaldata, "") == 0)
-      return NULL;
+    if(applocaldata == NULL || applocaldata[0] == '\0')
+      return std::nullopt;
     
-    const char *suffix = "/edut";
-    size_t len = strlen(applocaldata) + strlen(suffix);
-    configs_path = new char[len+1]();
-    snprintf(configs_path, len + 1, "%s%s", applocaldata, suffix);
+    configs_path = std::string(applocaldata) + "/edut";
     return configs_path;
   }
 #endif
 
   const char *xdg_env = getenv("XDG_CONFIG_HOME");
 
-  if(xdg_env != NULL && strcmp(xdg_env, "") != 0) {
-    const char *suffix = "/edut";
-    size_t len = strlen(xdg_env) + strlen(suffix);
-    configs_path = new char[len+1]();
-    sprintf(configs_path, "%s%s", xdg_env, suffix);
+  if(xdg_env != NULL && xdg_env[0] != '\0') {
+    configs_path = std::string(xdg_env) + "/edut";
     return configs_path;
   }
 
   const char *home_folder = getenv("HOME");
 
-  if(home_folder == NULL || strcmp(home_folder, "") == 0)
-    return NULL;
+  if(home_folder == NULL || home_folder[0] == '\0')
+    return std::nullopt;
 
-  const char *suffix = "/.config/edut";
-  size_t len = strlen(home_folder) + strlen(suffix);
-  configs_path = new char[len+1]();
-  sprintf(configs_path, "%s%s", home_folder, suffix);
+  configs_path = std::string(home_folder) + "/.config/edut";
 
   return configs_path;
 }
@@ -246,10 +237,10 @@ int lua_require_api(lua_State *L) {
 lua_State *load_user_configs() {
   lua_State *L = luaL_newstate(); 
 
-  char *user_configs_folder;
-  char *init_file_path;
+  auto user_configs_folder = get_user_lua_configs();
+  std::string init_file_path;
    
-  if((user_configs_folder = get_user_lua_configs()) == NULL) {
+  if(!user_configs_folder.has_value()) {
     puts("Couldn't find your configs folder.");
     lua_close(L);
     return NULL;
@@ -266,38 +257,33 @@ lua_State *load_user_configs() {
   lua_pop(L, 1); 
 
   lua_getfield(L, -1, "path");
-  const char *package_path = lua_tostring(L, -1);
-  lua_pushfstring(L, "%s;%s/lua/?.lua", package_path, user_configs_folder);
+  const std::string package_path(lua_tostring(L, -1));
+  lua_pushfstring(L, "%s;%s/lua/?.lua", package_path.c_str(), user_configs_folder.value().c_str());
   lua_setfield(L, -3, "path");
 
   lua_pop(L, 2);
 
-  const char *suffix = "/init.lua";
-  size_t len = strlen(user_configs_folder) + strlen(suffix);
-  init_file_path = new char[len + 1]();
-  sprintf(init_file_path, "%s%s", user_configs_folder, suffix);
+  init_file_path = *user_configs_folder + "/init.lua";
 
-  if(luaL_dofile(L, init_file_path) != LUA_OK) {
+  if(luaL_dofile(L, init_file_path.c_str()) != LUA_OK) {
     puts(lua_tostring(L, -1));
-    delete init_file_path;
-    delete user_configs_folder;
     lua_close(L);
     return NULL;
   }
 
-  delete init_file_path;
-  delete user_configs_folder;
   return L;
 }
 
 int main(int argc, char **argv) {
+  const std::vector<std::string> args(argv + 1, argv + argc);
+
   // Built-in options must work without loading or executing user configuration.
   if(argc > 1) {
-    if(strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+    if(args[0] == "--help" || args[0] == "-h") {
       puts(HELP_MESSAGE);
       return EXIT_SUCCESS;
     }
-    if(strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0) {
+    if(args[0] == "--version" || args[0] == "-v") {
       puts("edut " EDUT_VERSION);
       return EXIT_SUCCESS;
     }
@@ -312,7 +298,7 @@ int main(int argc, char **argv) {
     throw_error("No argument passed to the program.");
   }
 
-  parsed_input_t *parsed_input = parse_input(argv + 1, argc - 1);
+  parsed_input_t *parsed_input = parse_input(args.data(), argc - 1);
 
   if(parsed_input == NULL) {
     lua_close(L);

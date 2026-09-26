@@ -141,6 +141,34 @@ require "edut".setup {commands = {{"custom",
         self.run_cli("test", "--verbose=yes", success=False)
         self.run_cli("test", "--unknown=value", success=False)
 
+    def test_long_names_and_values(self):
+        command = "command" + "c" * 256
+        child = "child" + "s" * 256
+        flag = "--flag" + "f" * 256
+        value = "value with spaces=" + "v" * 1024
+        self.config.write_text('''
+require "edut".setup {commands = {{"%s",
+  execute = function(input)
+    local child = input.get_subcommand()
+    assert(child.get_name() == "%s")
+    child.execute(input.for_subcommand())
+  end,
+  subcommands = {{"%s", flags = {["%s"] = 1},
+    execute = function(input)
+      assert(input.contains_flag("%s"))
+      print("flag:" .. input.get_argument("%s", 1))
+      print("positional:" .. input.get_argument(1))
+      print("EXECUTED")
+    end,
+  }},
+}}}
+''' % (command, child, child, flag, flag, flag))
+        for args in ((flag, value), (flag + "=" + value,)):
+            with self.subTest(args=args):
+                output = self.run_cli(command, child, *args, value)
+                self.assertIn("flag:" + value, output)
+                self.assertIn("positional:" + value, output)
+
     def test_required_values(self):
         for args in (
             ("--output-file=",), ("--pair", "first"), ("--pair=first",),
