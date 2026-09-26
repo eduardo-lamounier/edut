@@ -32,16 +32,17 @@ void LuaStateDeleter::operator()(lua_State *state) const {
   lua_close(state);
 }
 
-// Returns ownership of the Lua state after loading user configuration.
+// Returns the Lua state after the user configs are loaded.
+// The returned smart pointer closes it when destroyed.
 LuaState load_user_configs() {
   LuaState state(luaL_newstate());
-  if(!state) {
+  if(state == nullptr) {
     puts("Couldn't create the Lua state.");
     return nullptr;
   }
   lua_State *L = state.get();
 
-  auto user_configs_folder = get_user_lua_configs();
+  std::optional<std::string> user_configs_folder = get_user_lua_configs();
 
   if(!user_configs_folder.has_value()) {
     puts("Couldn't find your configs folder.");

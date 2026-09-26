@@ -11,8 +11,11 @@ struct LuaStateDeleter {
 
 using LuaState = std::unique_ptr<lua_State, LuaStateDeleter>;
 
-// Loads user configuration; the returned owner closes the Lua state.
-// Returns nullptr if state creation, configuration discovery or loading fails.
+// Loads the user configuration.
+//
+// The returned smart pointer closes the Lua state when destroyed.
+// Returns nullptr if the state could not be created or the
+// configuration could not be found or loaded.
 LuaState load_user_configs();
 
 #endif

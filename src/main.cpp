@@ -38,12 +38,12 @@ int main(int argc, char **argv) {
     }
   }
 
-  // Lua finalizers may use input wrappers: close Lua before freeing their input.
-  // Locals are destroyed in reverse declaration order, including on early returns.
+  // Declared before the Lua state so the input is freed after it.
+  // Lua finalizers may still use the input while the state is closing.
   std::unique_ptr<ParsedInput> parsed_input;
-  auto state = load_user_configs();
+  LuaState state = load_user_configs();
   lua_State *L = state.get();
-  if(!state)
+  if(state == nullptr)
     return EXIT_FAILURE;
 
   if(argc == 1) {
@@ -51,12 +51,12 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  auto commands = get_registered_commands();
+  std::span<Command> commands = get_registered_commands();
   Parser parser(commands);
 
   parsed_input = parser.parse_input(args);
 
-  if(!parsed_input) {
+  if(parsed_input == nullptr) {
     report_error("Error when parsing the input.");
     return EXIT_FAILURE;
   }

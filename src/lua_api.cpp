@@ -9,7 +9,7 @@ extern "C" {
 
 #include "lua_api.hpp"
 
-// Borrowed from command_trees; the list owns all registration storage.
+// Points to the current commands, stored in command_trees.
 static std::vector<Command> *commands;
 
 std::span<Command> get_registered_commands() {
@@ -133,7 +133,7 @@ static int l_setup(lua_State *L) {
   lua_pop(L, 1);
 
   command_trees.emplace_back(new_commands_amount);
-  auto& new_commands = command_trees.back();
+  std::vector<Command>& new_commands = command_trees.back();
 
   for(size_t i = 0; i < new_commands_amount; i++)
     register_command(L, new_commands, i);
@@ -321,7 +321,7 @@ static int l_parsedinput_getargument(lua_State *L) {
     argument_index = luaL_checkinteger(L, 2);
     const ParsedFlag *flag = parsed_input->find_flag(flag_text);
 
-    if(!flag)
+    if(flag == nullptr)
       return luaL_error(L, "Unknown flag passed for this command."
         "\nIt's possible to check whether the flag exists with 'contains_flag'.");
     arguments = &flag->arguments;
