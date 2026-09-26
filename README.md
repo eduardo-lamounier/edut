@@ -70,6 +70,26 @@ Flag names within a command must be unique even after removing a trailing `=`.
 For example, declaring both `--output` and `--output=` is rejected because
 `--output=file.txt` would otherwise be ambiguous.
 
+## Script execution and errors
+
+`scripts run` accepts a direct filename in the configuration's `scripts/`
+directory. Nested paths, absolute paths, and symlink scripts are rejected. Spaces,
+quotes, and shell metacharacters in script and output filenames are treated
+literally.
+
+Foreground execution returns a nonzero CLI status if the script fails or output
+capture fails. `--output-file=` appends combined standard output and error while
+also displaying them. The CLI reports a failure status rather than forwarding
+the script's exact exit code.
+
+`--on-background` checks the script and output destination before launch and
+reports only that the job was launched; completion is not tracked. Its standard
+streams are detached. Supply `--output-file=` to retain background output.
+
+Uncaught Lua callback errors also produce a nonzero CLI exit. Errors from nested
+command callbacks propagate to their caller; Lua can explicitly recover with
+`pcall`.
+
 ## Development
 
 The C++ code is organized by responsibility:
@@ -92,7 +112,8 @@ After building, run the CLI regression tests on Unix with Python 3:
 python3 tests/test_cli.py build/edut
 ```
 
-Tests use temporary configurations and do not execute the bundled scripts.
+Tests use temporary configurations and disposable scripts; they do not execute
+the bundled generators.
 See [known issues](docs/known-issues.md) for remaining bugs and unfinished features.
 
 ## Collaborating

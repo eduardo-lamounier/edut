@@ -34,6 +34,8 @@ when passed as the first argument. The version is defined by `EDUT_VERSION` in
 4. C++ parses CLI arguments into a chain of parsed-input structures.
 5. C++ invokes the top-level command's `execute` callback. Lua callbacks explicitly
    dispatch to subcommands; parsing a subcommand does not automatically execute it.
+   Nested errors propagate to the Lua caller and may be caught with `pcall`.
+   Uncaught callback errors cause a nonzero CLI exit.
 
 A command definition uses its first array element as its name and supports
 `flags`, `subcommands`, and a required `execute` function. Flag lists contain
@@ -54,7 +56,10 @@ to `$HOME/.config/edut`. Windows support is partial; see the limitations below.
 The repository's `config/` directory is a sample configuration to install there.
 
 The script manager resolves scripts from the user's configuration directory and
-launches them with Bash. Scripts inherit the caller's working directory, allowing
+launches them with Bash. Only direct, readable, non-symlink script files are
+accepted; paths and output filenames are shell-quoted. Foreground script or output
+capture failures cause a nonzero CLI exit. Background execution validates inputs
+and reports launch only, detaching standard streams; use an output file for logs. Scripts inherit the caller's working directory, allowing
 them to operate on the current project when invoked from elsewhere.
 
 ## Build and validation
@@ -69,15 +74,16 @@ cmake --build build
 The executable is generated in `build/`. Run the Unix CLI regression suite with
 `python3 tests/test_cli.py build/edut`. For behavior changes, build and exercise relevant commands with an isolated
 configuration via `XDG_CONFIG_HOME`; avoid using or modifying personal configs.
-The bundled Java generator creates files in its working directory, so run it only
+Script regression tests create disposable scripts rather than running the bundled
+generators. The bundled Java generator creates files in its working directory, so run it only
 in a disposable directory when testing.
 
 ## Known limitations
 
 - `scripts run` is implemented; `add`, `rm`, `list`, `show`, and `edit` are stubs.
 - `contains_flag` checks only one name, despite the bundled help code passing two.
-- Lua callback errors do not reliably propagate to the process exit status.
-  Script command strings lack shell quoting, and pipelines can mask failures.
+- Configuration directory names containing Lua search-path separators or
+  placeholders (`;` or `?`) are not supported.
 - Command trees from replaced or failed registrations remain until process exit.
   API documentation is minimal.
 
