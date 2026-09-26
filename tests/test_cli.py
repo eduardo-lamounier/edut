@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import time
 import sys
 import tempfile
 import unittest
@@ -66,6 +68,75 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("EXECUTED", output)
         return output
 
+    def test_input_wrappers_survive_until_lua_shutdown(self):
+        for fail in (False, True):
+            with self.subTest(callback_fails=fail):
+                self.config.write_text(r'''
+local api = require "edut"
+api.setup {commands = {{"parent", subcommands = {{"child",
+  flags = {["--value"] = 1}, execute = function() end}},
+  execute = function(input)
+    local child = input.for_subcommand()
+    retained = setmetatable({}, {__gc = function()
+      assert(input.get_subcommand().get_name() == "child")
+      assert(child.get_argument(1) == "positional")
+      assert(child.get_argument("--value", 1) == "value")
+      print("INPUT_FINALIZED")
+    end})
+    -- Replacing registrations must not invalidate the retained input's commands.
+    api.setup {commands = {{"replacement", execute = function() end}}}
+    %s
+  end}}}
+''' % ('error("callback failed")' if fail else 'print("EXECUTED")'))
+                output = self.run_cli("parent", "child", "positional",
+                                      "--value", "value", success=not fail)
+                self.assertIn("INPUT_FINALIZED", output)
+
+    def test_callback_errors(self):
+        for error in ('error("callback failed")', 'error({detail = "failure"})'):
+            with self.subTest(error=error):
+                self.config.write_text('''
+require "edut".setup {commands = {{"fail", execute = function() %s end}}}
+''' % error)
+                self.assertIn("ERROR", self.run_cli("fail", success=False))
+
+    def test_command_wrapper_without_input(self):
+        self.config.write_text('''
+require "edut".setup {commands = {{"parent",
+  subcommands = {{"child", execute = function(input)
+    assert(input == nil)
+    print("EXECUTED")
+  end}},
+  execute = function(input)
+    local child = input.get_subcommand()
+    child.execute()
+    child.execute(nil)
+    child.execute(nil, "ignored")
+  end,
+}}}
+''')
+        self.run_cli("parent", "child")
+
+    def test_nested_callback_errors(self):
+        self.config.write_text('''
+require "edut".setup {commands = {{"parent", flags = {"--catch"},
+  subcommands = {{"child", execute = function() error("nested failure") end}},
+  execute = function(input)
+    local child = input.get_subcommand()
+    if input.contains_flag("--catch") then
+      local ok, message = pcall(child.execute, input.for_subcommand())
+      assert(not ok and message:find("nested failure", 1, true))
+      print("EXECUTED")
+    else
+      child.execute(input.for_subcommand())
+      print("EXECUTED")
+    end
+  end,
+}}}
+''')
+        self.assertIn("nested failure", self.run_cli("parent", "child", success=False))
+        self.run_cli("parent", "--catch", "child")
+
     def test_home_fallback(self):
         home = self.root / "home"
         target = home / ".config" / "edut"
@@ -97,7 +168,7 @@ class CliTests(unittest.TestCase):
                     self.assertEqual(result.stderr, "")
                     self.assertNotIn("CONFIG_LOADED", result.stdout)
                     if option in ("--version", "-v"):
-                        self.assertEqual(result.stdout, "edut 1.0.0\n")
+                        self.assertEqual(result.stdout, "edut 1.1.0\n")
                     else:
                         self.assertIn("Define and run custom CLI commands", result.stdout)
                         self.assertIn("Usage: edut", result.stdout)
@@ -141,6 +212,58 @@ require "edut".setup {commands = {{"custom",
         self.run_cli("test", "--verbose=yes", success=False)
         self.run_cli("test", "--unknown=value", success=False)
 
+    def test_long_names_and_values(self):
+        command = "command" + "c" * 256
+        child = "child" + "s" * 256
+        flag = "--flag" + "f" * 256
+        value = "value with spaces=" + "v" * 1024
+        self.config.write_text('''
+require "edut".setup {commands = {{"%s",
+  execute = function(input)
+    local child = input.get_subcommand()
+    assert(child.get_name() == "%s")
+    child.execute(input.for_subcommand())
+  end,
+  subcommands = {{"%s", flags = {["%s"] = 1},
+    execute = function(input)
+      assert(input.contains_flag("%s"))
+      print("flag:" .. input.get_argument("%s", 1))
+      print("positional:" .. input.get_argument(1))
+      print("EXECUTED")
+    end,
+  }},
+}}}
+''' % (command, child, child, flag, flag, flag))
+        for args in ((flag, value), (flag + "=" + value,)):
+            with self.subTest(args=args):
+                output = self.run_cli(command, child, *args, value)
+                self.assertIn("flag:" + value, output)
+                self.assertIn("positional:" + value, output)
+
+    def test_lua_argument_lookup(self):
+        self.config.write_text('''
+require "edut".setup {commands = {{"lookup", flags = {"--switch", ["--value"] = 1},
+  execute = function(input)
+    assert(input.contains_flag("--switch"))
+    assert(not input.contains_flag("--missing"))
+    assert(input.get_argument("--switch", 1) == nil)
+    assert(input.get_argument("--value", 1) == "first")
+    assert(input.get_argument(1) == "positional")
+    for _, index in ipairs({-1, 0, 2, math.maxinteger or 9007199254740991}) do
+      assert(input.get_argument("--value", index) == nil)
+      assert(input.get_argument(index) == nil)
+    end
+    local ok, message = pcall(input.get_argument, "--missing", 1)
+    assert(not ok and message:find("Unknown flag", 1, true))
+    ok, message = pcall(input.get_argument, {})
+    assert(not ok and message:find("Invalid argument", 1, true))
+    assert(not pcall(input.get_argument, "--value", "invalid"))
+    print("EXECUTED")
+  end,
+}}}
+''')
+        self.run_cli("lookup", "--switch", "--value=first", "--value=second", "positional")
+
     def test_required_values(self):
         for args in (
             ("--output-file=",), ("--pair", "first"), ("--pair=first",),
@@ -169,6 +292,59 @@ require "edut".setup {commands = {{"limit", flags = flags,
             output = self.run_cli("limit", "--flag20", success=count == 20)
             if count == 21:
                 self.assertIn("Too many flags", output)
+
+    def test_subcommand_limits(self):
+        for count in (10, 11):
+            with self.subTest(count=count):
+                self.config.write_text('''
+local children = {}
+for i = 1, %d do
+  children[i] = {"child" .. i, execute = function() print("EXECUTED") end}
+end
+require "edut".setup {commands = {{"parent", subcommands = children,
+  execute = function(input)
+    input.get_subcommand().execute(input.for_subcommand())
+  end,
+}}}
+''' % count)
+                output = self.run_cli("parent", "child10", success=count == 10)
+                if count == 11:
+                    self.assertIn("Too many subcommands", output)
+
+    def test_command_wrappers_survive_repeated_setup(self):
+        self.config.write_text('''
+local api = require "edut"
+api.setup {commands = {{"parent", subcommands = {{"child",
+  execute = function(input)
+    assert(input.get_argument(1) == "original")
+    print("EXECUTED")
+  end,
+}}, execute = function(input)
+  local child = input.get_subcommand()
+  local child_input = input.for_subcommand()
+  for generation = 1, 30 do
+    api.setup {commands = {{"replacement", execute = function() end}}}
+  end
+  local ok = pcall(api.setup, {commands = {{"broken", flags = {["--bad"] = -1},
+    execute = function() end}}})
+  assert(not ok)
+  assert(child.get_name() == "child")
+  child.execute(child_input)
+end}}}
+''')
+        self.run_cli("parent", "child", "original")
+
+    def test_empty_and_replaced_command_trees(self):
+        self.config.write_text(CONFIG + '''
+require "edut".setup {commands = {}}
+''')
+        self.run_cli("plain", success=False)
+        self.config.write_text(CONFIG + '''
+require "edut".setup {commands = {{"replacement",
+  execute = function() print("EXECUTED") end}}}
+''')
+        self.run_cli("replacement")
+        self.run_cli("plain", success=False)
 
     def test_invalid_flag_arity(self):
         for count in (-1, 11, 1.5):
@@ -221,6 +397,80 @@ local ok = pcall(require "edut".setup, {commands = {
 assert(not ok)
 ''')
         self.run_cli("partial", success=False)
+
+
+class ScriptTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.config_root = self.root / "config space ' $(touch injected)"
+        sample = Path(__file__).resolve().parents[1] / "config"
+        target = self.config_root / "edut"
+        target.mkdir(parents=True)
+        shutil.copy(sample / "init.lua", target / "init.lua")
+        shutil.copytree(sample / "lua", target / "lua")
+        self.scripts = target / "scripts"
+        self.scripts.mkdir()
+        self.env = dict(os.environ, XDG_CONFIG_HOME=str(self.config_root))
+
+    def run_script(self, name, *args, success=True):
+        result = subprocess.run(
+            [str(EXECUTABLE), "scripts", "run", name, *args],
+            env=self.env, cwd=self.root, capture_output=True, text=True, timeout=5,
+        )
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode == 0, success, output)
+        if not success:
+            self.assertNotIn("The script ran successfully", output)
+            self.assertNotIn("Script launched", output)
+        self.assertFalse((self.root / "injected").exists())
+        return output
+
+    def test_quoted_paths_and_output(self):
+        name = "-script ' ; $(touch injected).sh"
+        (self.scripts / name).write_text('printf "stdout\\n"; printf "stderr\\n" >&2\n')
+        output_file = self.root / "-output ' ; $(touch injected).txt"
+        output_file.write_text("existing\n")
+        output = self.run_script(name, "--output-file=" + output_file.name)
+        self.assertIn("The script ran successfully", output)
+        self.assertIn("stdout", output)
+        self.assertEqual(output_file.read_text(), "existing\nstdout\nstderr\n")
+
+    def test_script_and_capture_failures(self):
+        (self.scripts / "fail.sh").write_text("echo failed; exit 7\n")
+        for args in ((), ("--output-file=log.txt",)):
+            with self.subTest(args=args):
+                output = self.run_script("fail.sh", *args, success=False)
+                self.assertIn("exit 7", output)
+        (self.scripts / "ok.sh").write_text("echo success\n")
+        self.run_script("ok.sh", "--output-file=missing/log.txt", success=False)
+        self.run_script("ok.sh", "--output-file=", "", success=False)
+        if Path("/dev/full").exists():
+            self.run_script("ok.sh", "--output-file=/dev/full", success=False)
+
+    def test_script_path_policy(self):
+        outside = self.root / "outside.sh"
+        outside.write_text("touch injected\n")
+        (self.scripts / "link.sh").symlink_to(outside)
+        (self.scripts / "directory").mkdir()
+        for name in ("", ".", "..", "../outside.sh", str(outside),
+                     "link.sh", "missing.sh", "directory"):
+            with self.subTest(name=name):
+                self.run_script(name, success=False)
+
+    def test_background_launch(self):
+        (self.scripts / "background.sh").write_text("echo BACKGROUND_DONE; exit 7\n")
+        output = self.run_script("background.sh", "--on-background", "--output-file=background.txt")
+        self.assertIn("completion is not tracked", output)
+        self.assertNotIn("The script ran successfully", output)
+        log = self.root / "background.txt"
+        deadline = time.monotonic() + 3
+        while "BACKGROUND_DONE" not in log.read_text() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertIn("BACKGROUND_DONE", log.read_text())
+        self.run_script("missing.sh", "--on-background", success=False)
+        self.run_script("background.sh", "--on-background", "--output-file=missing/log.txt", success=False)
 
 
 if __name__ == "__main__":

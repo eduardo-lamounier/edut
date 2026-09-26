@@ -1,83 +1,112 @@
 # edut
 
-A command-line framework that lets users define CLI commands, arguments, and behavior in Lua while relying on a C runtime for parsing and execution.
+Define your own command-line commands in Lua and run them through `edut`.
+You can add arguments, flags, and subcommands, then choose what each command does.
+The bundled configuration includes a Bash script manager.
 
 ## Installation
 
-The user must have Lua to use the framework, as great part of the Lua configuration is stored and managed using Lua's runtime.
+Building from source requires CMake, a compiler supporting C++23, and Lua
+development headers and libraries. The bundled script manager also requires Bash;
+output capture uses `tee`.
 
-You can install the pre-compiled executable in the repository's releases, but if you wish to install from the source:
-
-Firstly clone it:
-```
-# Clones the project and enters the created directory
+```sh
 git clone https://github.com/eduardo-lamounier/edut
 cd edut
-```
-
-The project can then be built and compiled with CMake:
-```
-# Builds the project
-cmake -B build 
-
-# Compiles with release optimizations
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-The executable will be generated in `build/edut` for you to use it.
+On Unix, the executable is generated at `build/edut`. You can run it from there,
+or copy it to a directory in your `PATH` to use `edut` from any directory.
+The examples below assume it is in your `PATH`.
 
-You can use the default configs copying its folder to, depending on your OS:
+Windows support is partial. The configuration loader recognizes
+`%LOCALAPPDATA%/edut`, but the bundled script manager relies on Unix tools and
+configuration paths. See [platform limitations](docs/known-issues.md#platform-support).
 
-On Linux and MacOS (Unix):
+## Your first command
+
+On Unix, `edut` reads `init.lua` from `$XDG_CONFIG_HOME/edut`, or
+`~/.config/edut` when `XDG_CONFIG_HOME` is unset or empty. Create that directory:
+
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/edut"
 ```
-mkdir -p ~/.config && cp -r config ~/.config/edut
+
+For a new configuration, create `init.lua` inside it with this command:
+
+```lua
+local api = require "edut"
+
+api.setup {
+  commands = {
+    {
+      "hello",
+      execute = function(input)
+        local name = input.get_argument(1) or "world"
+        print("Hello, " .. name .. "!")
+      end,
+    },
+  },
+}
 ```
 
-On Windows (Powershell):
-```pwsh
-cp -Recurse config "$env:LOCALAPPDATA\edut"
+Then run:
+
+```sh
+edut hello
+edut hello Eduardo
 ```
 
-There you can also make your own changes.
+The commands print `Hello, world!` and `Hello, Eduardo!` respectively.
+To add flags or organize commands into modules, see the
+[configuration guide](docs/configuration.md).
+
+## Using the bundled script manager
+
+If you prefer to start with the bundled commands, copy the contents of `config/`
+from this repository into your configuration directory. For a new installation:
+
+```sh
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/edut"
+cp -r config/. "${XDG_CONFIG_HOME:-$HOME/.config}/edut/"
+```
+
+This installs the sample `init.lua`, Lua modules, and scripts. If you already
+have a configuration, merge the files you want to use instead of replacing it.
+
+Place a readable Bash script, such as `example.sh`, in the configuration's
+`scripts/` directory, then run:
+
+```sh
+edut scripts run example.sh
+edut scripts run example.sh --output-file=run.log
+edut scripts run example.sh --on-background --output-file=run.log
+```
+
+Scripts run in the directory you invoke `edut` from. Relative output paths also
+refer to that directory. Only `scripts run` is implemented; the other bundled
+subcommands are unfinished.
+
+See [script execution](docs/configuration.md#script-execution-and-errors) for
+filename restrictions, logging, and background behavior.
 
 ## Built-in options
 
-- `edut --help` or `edut -h`: describe the application and show usage.
-- `edut --version` or `edut -v`: print `edut 1.0.0`.
+- `edut --help` or `edut -h`: show usage.
+- `edut --version` or `edut -v`: print the installed version.
 
-These options exit successfully without loading Lua configuration, so they also
-work when configuration is missing or invalid. They apply as the first argument;
-flags after a command name are handled by that command's configuration.
+These options work without loading your configuration. They apply when passed
+as the first argument; flags after a command name are handled by that command.
 
-## Flag arguments
+## More documentation
 
-Flags declared with values in Lua, such as `["--output-file="] = 1`, accept both
-`--output-file= file.txt` and `--output-file=file.txt`. The Lua lookup name remains
-`--output-file=` in either case. Flags declared without a trailing `=`, such as
-`["--output"] = 1`, also accept `--output file.txt` and `--output=file.txt`.
+- [Configuration guide](docs/configuration.md): Lua commands, flags, and script execution.
+- [Known issues](docs/known-issues.md): current limitations and unfinished features.
+- [Development guide](docs/development.md): source layout, building, and testing.
 
-All declared values must be supplied before another flag or subcommand. An
-attached value can contain a flag or subcommand name without being interpreted
-as one. For flags accepting multiple values, the attached value is the first;
-the remaining values are separate arguments. For a name ending in `=`, the exact
-token (for example `--output-file=`) retains its original meaning and expects a
-separate value; pass an empty quoted argument to supply an empty value.
+## Contributing
 
-Flag names within a command must be unique even after removing a trailing `=`.
-For example, declaring both `--output` and `--output=` is rejected because
-`--output=file.txt` would otherwise be ambiguous.
-
-## Development
-
-After building, run the CLI regression tests on Unix with Python 3:
-
-```sh
-python3 tests/test_cli.py build/edut
-```
-
-Tests use temporary configurations and do not execute the bundled scripts.
-See [known issues](docs/known-issues.md) for remaining bugs and unfinished features.
-
-## Collaborating
-
-The framework is simple and certainly needs some improvement, so any help for the project will be very well received! It can be with creating a good documentation, adding support to other languages, adding support for other operating systems etc.
+Contributions to the code, documentation, and platform support are welcome.
+See the [development guide](docs/development.md) to get started.
