@@ -19,14 +19,18 @@ end
 
 -- All dynamic values are shell arguments, never shell program text.
 local function shellQuote(value)
-  if value:find("%z") then error("Paths cannot contain NUL bytes", 0) end
+  if value:find "%z" then error("Paths cannot contain NUL bytes", 0) end
   return "'" .. value:gsub("'", "'\"'\"'") .. "'"
 end
 
 local function runScript(scriptName, outputFile, background)
   -- Only direct, non-symlink files in the scripts directory may be run.
-  if scriptName == "" or scriptName == "." or scriptName == ".."
-    or scriptName:find("/", 1, true) or scriptName:find("\\", 1, true)
+  if
+    scriptName == ""
+    or scriptName == "."
+    or scriptName == ".."
+    or scriptName:find("/", 1, true)
+    or scriptName:find("\\", 1, true)
   then
     error("Expected a script filename inside the scripts directory", 0)
   end
@@ -63,12 +67,24 @@ fi
 
   if outputFile == "" then error("Output file path cannot be empty", 0) end
   local success, reason, status = os.execute(
-    "bash -c " .. shellQuote(runner) .. " edut-script "
-      .. shellQuote(scriptPath) .. " " .. shellQuote(outputFile or "") .. " "
+    "bash -c "
+      .. shellQuote(runner)
+      .. " edut-script "
+      .. shellQuote(scriptPath)
+      .. " "
+      .. shellQuote(outputFile or "")
+      .. " "
       .. shellQuote(background and "yes" or "no")
   )
   if not success then
-    error("Script execution or launch failed (" .. tostring(reason) .. " " .. tostring(status) .. ")", 0)
+    error(
+      "Script execution or launch failed ("
+        .. tostring(reason)
+        .. " "
+        .. tostring(status)
+        .. ")",
+      0
+    )
   end
 end
 
@@ -129,8 +145,11 @@ return {
           runScript(scriptName, options.outputFilePath, options.runOnBackground)
 
           print("\n" .. string.rep("`", getUserTerminalWidth()))
-          print(options.runOnBackground and "Script launched in background; completion is not tracked"
-            or "The script ran successfully")
+          print(
+            options.runOnBackground
+                and "Script launched in background; completion is not tracked"
+              or "The script ran successfully"
+          )
         end,
       },
       {
