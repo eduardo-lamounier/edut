@@ -1,4 +1,6 @@
 #include<stdio.h>
+#include<iostream>
+#include<print>
 #include<memory>
 
 #include "parser.hpp"
@@ -29,7 +31,7 @@ struct FlagMatch {
 
 // Preserve the registered flag name while accepting an attached first value.
 static std::optional<FlagMatch> find_input_flag(const Command& command,
-    const std::string& text) {
+                                                const std::string& text) {
   for(size_t i = 0; i < command.flags.size(); i++)
     if(command.flags[i].text == text) return FlagMatch{i, std::nullopt};
 
@@ -78,8 +80,7 @@ std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> ar
 
     if(missing_flag_arguments(current)) {
       if(subcommand != NULL || flag_match.has_value() || arg.starts_with("--")) {
-        printf("Missing arguments for flag '%s'.\n",
-          current->flags.back().flag.text.c_str());
+        std::println("Missing arguments for flag '{}'.", current->flags.back().flag.text);
         return nullptr;
       }
       current->flags.back().arguments.push_back(arg);
@@ -107,20 +108,22 @@ std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> ar
     }
 
     if(arg.starts_with("--")) {
-      printf("Invalid flag '%s' passed to command '%s'.\n", arg.c_str(), current->command->name.c_str());
+      std::println("Invalid flag '{}' passed to command '{}'.",
+                   arg, current->command->name);
       return nullptr;
     }
 
     if(current->direct_arguments.size() >= MAX_ARGUMENTS) {
-      printf("Too many positional arguments for command '%s'.\n", current->command->name.c_str());
+      std::println("Too many positional arguments for command '{}'.",
+                   current->command->name);
       return nullptr;
     }
     current->direct_arguments.push_back(arg);
   }
 
   if(missing_flag_arguments(current)) {
-    printf("Missing arguments for flag '%s'.\n",
-      current->flags.back().flag.text.c_str());
+    std::println("Missing arguments for flag '{}'.",
+                 current->flags.back().flag.text);
     return nullptr;
   }
 

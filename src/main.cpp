@@ -1,3 +1,4 @@
+#include <print>
 #include<stdio.h>
 #include<stdlib.h>
 #include<string>
@@ -29,11 +30,11 @@ int main(int argc, char **argv) {
   // Built-in options must work without loading or executing user configuration.
   if(argc > 1) {
     if(args[0] == "--help" || args[0] == "-h") {
-      puts(HELP_MESSAGE);
+      std::println(HELP_MESSAGE);
       return EXIT_SUCCESS;
     }
     if(args[0] == "--version" || args[0] == "-v") {
-      puts("edut " EDUT_VERSION);
+      std::println("edut {}", EDUT_VERSION);
       return EXIT_SUCCESS;
     }
   }

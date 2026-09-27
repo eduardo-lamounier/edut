@@ -1,4 +1,5 @@
 #include<optional>
+#include <print>
 #include<stdio.h>
 #include<stdlib.h>
 
@@ -37,7 +38,7 @@ void LuaStateDeleter::operator()(lua_State *state) const {
 LuaState load_user_configs() {
   LuaState state(luaL_newstate());
   if(state == nullptr) {
-    puts("Couldn't create the Lua state.");
+    std::println("Couldn't create the Lua state.");
     return nullptr;
   }
   lua_State *L = state.get();
@@ -45,7 +46,7 @@ LuaState load_user_configs() {
   std::optional<std::string> user_configs_folder = get_user_lua_configs();
 
   if(!user_configs_folder.has_value()) {
-    puts("Couldn't find your configs folder.");
+    std::println("Couldn't find your configs folder.");
     return nullptr;
   }
 
