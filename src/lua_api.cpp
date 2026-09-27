@@ -51,10 +51,6 @@ static void register_command(lua_State *L, std::vector<Command>& commands, int i
   if(lua_istable(L, -1)) {
     lua_pushnil(L);
     while(lua_next(L, -2) != 0) {
-      if(command.flags.size() >= MAX_FLAGS)
-        luaL_error(L, "Too many flags for command '%s' (maximum %d)",
-          command.name.c_str(), MAX_FLAGS);
-
       size_t flag_idx = command.flags.size();
 
       command.flags.emplace_back();
@@ -66,9 +62,9 @@ static void register_command(lua_State *L, std::vector<Command>& commands, int i
       } else if(lua_isstring(L, -2) && lua_isnumber(L, -1)) {
         flag.text = lua_tostring(L, -2);
         lua_Integer count = luaL_checkinteger(L, -1);
-        if(count < 0 || count > MAX_ARGUMENTS || count != lua_tonumber(L, -1))
-          luaL_error(L, "Flag '%s' must accept between 0 and %d arguments",
-            flag.text.c_str(), MAX_ARGUMENTS);
+        if(count < 0 || count != lua_tonumber(L, -1))
+          luaL_error(L, "Flag '%s' must accept none or more arguments.",
+                     flag.text.c_str());
         flag.arguments_amount = (size_t)count;
       } else {
         luaL_error(L, "Expected name of a flag, or name of flag (key) and"
@@ -93,10 +89,6 @@ static void register_command(lua_State *L, std::vector<Command>& commands, int i
     lua_len(L, -1);
     size_t subcommands_amount = lua_tointeger(L, -1);
     lua_pop(L, 1);
-
-    if(subcommands_amount > MAX_SUBCOMMANDS)
-      luaL_error(L, "Too many subcommands for command '%s' (maximum %d)",
-        command.name.c_str(), MAX_SUBCOMMANDS);
 
     command.sub_commands.resize(subcommands_amount);
 

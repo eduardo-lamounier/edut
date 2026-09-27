@@ -96,10 +96,6 @@ std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> ar
     }
 
     if(flag_match.has_value()) {
-      if(current->flags.size() >= MAX_FLAGS) {
-        return nullptr;
-      }
-
       current->flags.push_back({current->command->flags[flag_match->index], {}});
       if(flag_match->inline_value.has_value()) {
         current->flags.back().arguments.push_back(*flag_match->inline_value);
@@ -113,11 +109,6 @@ std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> ar
       return nullptr;
     }
 
-    if(current->direct_arguments.size() >= MAX_ARGUMENTS) {
-      std::println("Too many positional arguments for command '{}'.",
-                   current->command->name);
-      return nullptr;
-    }
     current->direct_arguments.push_back(arg);
   }
 
