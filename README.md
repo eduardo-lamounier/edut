@@ -56,10 +56,10 @@ Then run:
 
 ```sh
 edut hello
-edut hello Eduardo
+edut hello someone
 ```
 
-The commands print `Hello, world!` and `Hello, Eduardo!` respectively.
+The commands print `Hello, world!` and `Hello, someone!` respectively.
 To add flags or organize commands into modules, see the
 [configuration guide](docs/configuration.md).
 
