@@ -1,5 +1,4 @@
-#include <print>
-#include<stdio.h>
+#include<print>
 #include<stdlib.h>
 #include<string>
 #include<vector>
