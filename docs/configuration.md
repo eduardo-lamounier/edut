@@ -20,7 +20,8 @@ An out-of-range argument index returns `nil`.
 
 For larger configurations, place modules in the configuration's `lua/` directory
 and load them with `require`. The bundled [init.lua](../config/init.lua) shows
-how to collect command definitions from modules.
+how to collect command definitions from modules. Each module returns a list of
+commands; see [example.lua](../config/lua/example.lua) for a working example.
 
 ## Subcommands
 
@@ -62,28 +63,11 @@ Flag names within a command must be unique even after removing a trailing `=`.
 For example, declaring both `--output` and `--output=` is rejected because
 `--output=file.txt` would otherwise be ambiguous.
 
-Command and flag names have no fixed character limit. Each command accepts up
-to 20 registered flags, 10 subcommands, and 10 positional arguments. Each flag
-can take up to 10 values. Input may contain up to 20 flag occurrences per command;
-repeating a flag counts toward that limit, and lookup returns the first occurrence.
+Repeated flags are allowed; lookup returns the first occurrence.
 
-## Script execution and errors
+## Errors
 
-`scripts run` accepts a direct filename in the configuration's `scripts/`
-directory. Nested paths, absolute paths, and symlink scripts are rejected. Spaces,
-quotes, and shell metacharacters in script and output filenames are treated
-literally.
-
-Foreground execution returns a nonzero CLI status if the script fails or output
-capture fails. `--output-file=` appends combined standard output and error while
-also displaying them. The CLI reports a failure status rather than forwarding
-the script's exact exit code.
-
-`--on-background` checks the script and output destination before launch and
-reports only that the job was launched; completion is not tracked. Its standard
-streams are detached. Supply `--output-file=` to retain background output.
-
-Uncaught Lua callback errors also produce a nonzero CLI exit. Errors from nested
+Uncaught Lua callback errors produce a nonzero CLI exit. Errors from nested
 command callbacks propagate to their caller; Lua can explicitly recover with
 `pcall`.
 

@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 import subprocess
 import shutil
-import time
 import sys
 import tempfile
 import unittest
@@ -367,71 +366,33 @@ assert(not ok)
         self.run_cli("partial", success=False)
 
 
-class ScriptTests(CliTestCase):
+class ExampleTests(CliTestCase):
     def setUp(self):
         super().setUp()
-        self.config_root = self.root / "config space ' $(touch injected)"
         sample = Path(__file__).resolve().parents[1] / "config"
-        target = self.config_root / "edut"
-        target.mkdir(parents=True)
-        shutil.copy(sample / "init.lua", target / "init.lua")
-        shutil.copytree(sample / "lua", target / "lua")
-        self.scripts = target / "scripts"
-        self.scripts.mkdir()
-        self.env["XDG_CONFIG_HOME"] = str(self.config_root)
+        shutil.copytree(sample, self.root / "edut")
 
-    def run_script(self, name, *args, success=True):
-        output = self.invoke("scripts", "run", name, *args, success=success)
-        if not success:
-            self.assertNotIn("The script ran successfully", output)
-            self.assertNotIn("Script launched", output)
-        self.assertFalse((self.root / "injected").exists())
-        return output
+    def test_greetings(self):
+        self.assertEqual(self.invoke("example", "greet"), "Hello, world!\n")
+        self.assertEqual(self.invoke("example", "greet", "Eduardo"), "Hello, Eduardo!\n")
+        for flag in (("--greeting=Hi",), ("--greeting", "Hi")):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    self.invoke("example", "greet", "Eduardo", *flag, "--upper"),
+                    "HI, EDUARDO!\n",
+                )
 
-    def test_quoted_paths_and_output(self):
-        name = "-script ' ; $(touch injected).sh"
-        (self.scripts / name).write_text('printf "stdout\\n"; printf "stderr\\n" >&2\n')
-        output_file = self.root / "-output ' ; $(touch injected).txt"
-        output_file.write_text("existing\n")
-        output = self.run_script(name, "--output-file=" + output_file.name)
-        self.assertIn("The script ran successfully", output)
-        self.assertIn("stdout", output)
-        self.assertEqual(output_file.read_text(), "existing\nstdout\nstderr\n")
-
-    def test_script_and_capture_failures(self):
-        (self.scripts / "fail.sh").write_text("echo failed; exit 7\n")
-        for args in ((), ("--output-file=log.txt",)):
-            with self.subTest(args=args):
-                output = self.run_script("fail.sh", *args, success=False)
-                self.assertIn("exit 7", output)
-        (self.scripts / "ok.sh").write_text("echo success\n")
-        self.run_script("ok.sh", "--output-file=missing/log.txt", success=False)
-        self.run_script("ok.sh", "--output-file=", "", success=False)
-        if Path("/dev/full").exists():
-            self.run_script("ok.sh", "--output-file=/dev/full", success=False)
-
-    def test_script_path_policy(self):
-        outside = self.root / "outside.sh"
-        outside.write_text("touch injected\n")
-        (self.scripts / "link.sh").symlink_to(outside)
-        (self.scripts / "directory").mkdir()
-        for name in ("", ".", "..", "../outside.sh", str(outside),
-                     "link.sh", "missing.sh", "directory"):
-            with self.subTest(name=name):
-                self.run_script(name, success=False)
-
-    def test_background_launch(self):
-        (self.scripts / "background.sh").write_text("echo BACKGROUND_DONE; exit 7\n")
-        output = self.run_script("background.sh", "--on-background", "--output-file=background.txt")
-        self.assertIn("completion is not tracked", output)
-        self.assertNotIn("The script ran successfully", output)
-        log = self.root / "background.txt"
-        deadline = time.monotonic() + 3
-        while "BACKGROUND_DONE" not in log.read_text() and time.monotonic() < deadline:
-            time.sleep(0.01)
-        self.assertIn("BACKGROUND_DONE", log.read_text())
-        self.run_script("missing.sh", "--on-background", success=False)
-        self.run_script("background.sh", "--on-background", "--output-file=missing/log.txt", success=False)
+    def test_help_and_dispatch(self):
+        self.assertIn("Try:", self.invoke("example"))
+        for command in (("example",), ("example", "greet")):
+            for flag in ("--help", "-h"):
+                with self.subTest(command=command, flag=flag):
+                    output = self.invoke(*command, flag)
+                    self.assertTrue(output.startswith("Usage:"), output)
+                    self.assertNotIn("Hello,", output)
+        self.invoke("example", "unknown", success=False)
+        self.invoke("example", "greet", "one", "two", success=False)
+        self.invoke("example", "greet", "--greeting", success=False)
 
 
 if __name__ == "__main__":

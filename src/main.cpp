@@ -19,8 +19,7 @@ constexpr std::string_view HELP_MESSAGE =
   "  -h, --help     Show this help and exit.\n"
   "  -v, --version  Show the application version and exit.\n"
   "\n"
-  "Commands are defined in your edut Lua configuration.\n"
-  "The bundled configuration provides the scripts command.";
+  "Commands are defined in your edut Lua configuration.";
 
 constexpr std::string_view EDUT_VERSION = "1.1.0";
 

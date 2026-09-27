@@ -4,29 +4,11 @@ This document tracks issues identified during the initial codebase review that
 remain unresolved. It is a development backlog, not a guarantee that all other
 behavior has been validated. Remove or update entries as they are addressed.
 
-## Script manager
+## Platform support
 
-### Unimplemented subcommands
-
-In `config/lua/scripting.lua`, `scripts add`, `rm`, `list`, `show`, and `edit`
-terminate with a “NOT IMPLEMENTED” error. Only `run` has substantive behavior.
-Each remaining subcommand needs defined behavior and validation before use.
-
-### Help flag mismatch
-
-The Lua help handler calls `contains_flag("--help", "-h")`, but
-`l_parsedinput_containsflag` in `src/lua_api.cpp` checks only its first argument.
-Consequently, `-h` is parsed but does not display help. Either support multiple
-names in the API or check each separately in Lua. The help handler also continues
-to print “No subcommand passed” after displaying help.
-
-### Platform support
-
-Although the C++ loader now uses `LOCALAPPDATA` on Windows, the Lua script manager
-still locates scripts using `XDG_CONFIG_HOME` or `HOME`. It also assumes Bash,
-`tput`, `tee`, and Unix redirection. CMake passes GCC-style compiler options
-unconditionally. Windows configuration discovery alone does not establish full
-Windows support; the script manager and native build need separate validation.
+The configuration loader recognizes `LOCALAPPDATA` on Windows, but native Windows
+builds and runtime behavior still need validation. CMake currently passes
+GCC-style compiler options unconditionally.
 
 ## C++ runtime and Lua boundary
 
@@ -52,7 +34,11 @@ use automatic string storage.
 ## Documentation and verification
 
 The [configuration guide](configuration.md) covers basic command definitions,
-input lookup, dispatch, and errors. A complete Lua API reference is still needed. Regression tests now
-cover configuration fallback, registration limits, and argument parsing on Unix,
-along with callback failure propagation and disposable script execution tests.
-Native Windows behavior and the entire Lua API are not covered. Extend coverage alongside changes to those areas.
+input lookup, dispatch, and errors. A complete Lua API reference is still needed.
+The CLI regression suite covers core framework behavior and the sample configuration
+on Unix. Native Windows behavior and the entire Lua API are not covered. Extend
+coverage alongside changes to those areas.
+
+Some regression tests still assume former fixed limits on positional arguments,
+registered flags, repeated flags, and subcommands. These expectations need to be
+updated for the current dynamically sized collections.

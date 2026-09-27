@@ -18,7 +18,7 @@ local function load_commands(modules)
 end
 
 require("edut").setup {
-  commands = load_commands { "scripting" },
+  commands = load_commands { "example" },
 }
 
 -- if you wish to customize something, do it here or in a

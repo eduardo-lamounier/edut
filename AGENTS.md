@@ -2,8 +2,8 @@
 
 `edut` is a CLI framework written in C++ with Lua configuration. Users define
 commands, nested subcommands, flags, and execution callbacks in Lua, then access
-them through one executable. The bundled Lua configuration is an unfinished shell
-script manager built on the framework.
+them through one executable. The bundled Lua configuration is a small
+getting-started example.
 
 ## Code layout
 
@@ -11,14 +11,13 @@ script manager built on the framework.
 - `src/parser.cpp` and `include/parser.hpp`: argument parsing, command/flag lookup,
   and parsed-input structures and cleanup. Parsing has no Lua dependency and
   receives the command collection explicitly.
-- `include/command.hpp`: command and flag structures and registration limits.
+- `include/command.hpp`: command and flag structures.
 - `src/lua_api.cpp` and `include/lua_api.hpp`: the `edut` Lua module, command
   registration and ownership, callback execution, and private Lua wrappers.
 - `src/config.cpp` and `include/config.hpp`: configuration discovery, Lua state
   initialization, module search paths, and loading `init.lua`.
 - `config/init.lua`: entry point for the user's Lua configuration.
-- `config/lua/scripting.lua`: bundled `scripts` command and its subcommands.
-- `config/scripts/`: shell scripts available to the bundled script manager.
+- `config/lua/example.lua`: example commands for getting started.
 - `CMakeLists.txt`: executable build and Lua dependency configuration.
 
 ## Execution and Lua API
@@ -49,18 +48,11 @@ closure-based functions called with dot syntax, not colon syntax. Argument indic
 are one-based; `get_argument(index)` reads a positional argument and
 `get_argument(flag, index)` reads a flag argument.
 
-## Configuration and script behavior
+## Configuration
 
 The intended Unix configuration location is `$XDG_CONFIG_HOME/edut`, falling back
 to `$HOME/.config/edut`. Windows support is partial; see the limitations below.
 The repository's `config/` directory is a sample configuration to install there.
-
-The script manager resolves scripts from the user's configuration directory and
-launches them with Bash. Only direct, readable, non-symlink script files are
-accepted; paths and output filenames are shell-quoted. Foreground script or output
-capture failures cause a nonzero CLI exit. Background execution validates inputs
-and reports launch only, detaching standard streams; use an output file for logs. Scripts inherit the caller's working directory, allowing
-them to operate on the current project when invoked from elsewhere.
 
 ## Build and validation
 
@@ -74,14 +66,9 @@ cmake --build build
 The executable is generated in `build/`. Run the Unix CLI regression suite with
 `python3 tests/test_cli.py build/edut`. For behavior changes, build and exercise relevant commands with an isolated
 configuration via `XDG_CONFIG_HOME`; avoid using or modifying personal configs.
-Script regression tests create disposable scripts rather than running the bundled
-generators. The bundled Java generator creates files in its working directory, so run it only
-in a disposable directory when testing.
 
 ## Known limitations
 
-- `scripts run` is implemented; `add`, `rm`, `list`, `show`, and `edit` are stubs.
-- `contains_flag` checks only one name, despite the bundled help code passing two.
 - Configuration directory names containing Lua search-path separators or
   placeholders (`;` or `?`) are not supported.
 - Command trees from replaced or failed registrations remain until process exit.
@@ -92,7 +79,7 @@ accept separate and attached values; Lua lookups use the registered flag name.
 
 ## Working conventions
 
-Keep the C++ framework generic and script-manager behavior in Lua. Follow nearby
+Keep the C++ framework generic and application-specific behavior in Lua. Follow nearby
 code style; Lua formatting settings are in `config/.stylua.toml`. When changing
 the C++/Lua boundary, check Lua stack balance, registry references, pointer lifetimes,
 and argument bounds. Keep command storage stable while parsed input or Lua

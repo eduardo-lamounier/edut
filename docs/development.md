@@ -23,8 +23,8 @@ see the [README](../README.md).
 - `src/lua_api.cpp` and `include/lua_api.hpp`: command registration, Lua wrappers,
   and callback execution.
 - `src/config.cpp` and `include/config.hpp`: configuration discovery and loading.
-- `include/command.hpp`: command and flag definitions and registration limits.
-- `config/`: sample Lua configuration and the bundled script manager.
+- `include/command.hpp`: command and flag definitions.
+- `config/`: sample Lua configuration for getting started.
 - `tests/test_cli.py`: Unix CLI regression tests.
 
 ## Ownership and execution
@@ -55,16 +55,13 @@ After building, run the regression suite with Python 3:
 python3 tests/test_cli.py build/edut
 ```
 
-Tests use temporary configurations and disposable scripts. They do not modify
-personal configurations or execute the bundled generators.
-
+Tests use temporary configurations and do not modify personal configurations.
 For manual checks, set `XDG_CONFIG_HOME` to a temporary directory containing an
-`edut/init.lua` configuration. The bundled Java generator creates files in the
-working directory, so run it only in a disposable directory when testing.
+`edut/init.lua` configuration.
 
 ## Making changes
 
-Keep the C++ framework generic and script-manager behavior in Lua. Follow the
+Keep the C++ framework generic and application-specific behavior in Lua. Follow the
 nearby code and comment style; Lua formatting settings are in
 `config/.stylua.toml`.
 
