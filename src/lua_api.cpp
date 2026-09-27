@@ -1,5 +1,5 @@
-#include<iostream>
 #include<list>
+#include <print>
 #include<stdio.h>
 #include<stdlib.h>
 
@@ -138,7 +138,7 @@ static int l_setup(lua_State *L) {
 
 // Reports and error message. Does NOT terminate the program.
 void report_error(const std::string& msg) {
-  std::cout << "\033[31mERROR: " << msg << "\033[m\n";
+  std::println("\033[31mERROR: {}\033[m\n", msg);
 }
 
 // Implementation of the framework's function 'report'.
