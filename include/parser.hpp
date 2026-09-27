@@ -1,5 +1,4 @@
-#ifndef PARSER_HPP
-#define PARSER_HPP
+#pragma once
 
 #include<memory>
 #include<optional>
@@ -40,5 +39,3 @@ public:
 
   Parser(std::span<Command> commands) : commands(commands) { }
 };
-
-#endif

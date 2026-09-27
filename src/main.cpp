@@ -8,21 +8,22 @@
 #include "lua_api.hpp"
 #include "parser.hpp"
 
-#define HELP_MESSAGE "edut - Define and run custom CLI commands in one place.\n" \
-  "Configure commands, subcommands, flags, and behavior in Lua.\n"               \
-  "\n"                                                                           \
-  "Usage: edut <command> [arguments]\n"                                          \
-  "       edut --help | -h\n"                                                    \
-  "       edut --version | -v\n"                                                 \
-  "\n"                                                                           \
-  "Options:\n"                                                                   \
-  "  -h, --help     Show this help and exit.\n"                                  \
-  "  -v, --version  Show the application version and exit.\n"                    \
-  "\n"                                                                           \
-  "Commands are defined in your edut Lua configuration.\n"                       \
-  "The bundled configuration provides the scripts command."
+constexpr std::string_view HELP_MESSAGE =
+  "(edut - Define and run custom CLI commands in one place.\n"
+  "Configure commands, subcommands, flags, and behavior in Lua.\n"
+  "\n"
+  "Usage: edut <command> [arguments]\n"
+  "       edut --help | -h\n"
+  "       edut --version | -v\n"
+  "\n"
+  "Options:\n"
+  "  -h, --help     Show this help and exit.\n"
+  "  -v, --version  Show the application version and exit.\n"
+  "\n"
+  "Commands are defined in your edut Lua configuration.\n"
+  "The bundled configuration provides the scripts command.";
 
-#define EDUT_VERSION "1.1.0"
+constexpr std::string_view EDUT_VERSION = "1.1.0";
 
 int main(int argc, char **argv) {
   const std::vector<std::string> args(argv + 1, argv + argc);

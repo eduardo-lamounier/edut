@@ -1,5 +1,4 @@
-#ifndef CONFIG_HPP
-#define CONFIG_HPP
+#pragma once
 
 #include<memory>
 
@@ -17,5 +16,3 @@ using LuaState = std::unique_ptr<lua_State, LuaStateDeleter>;
 // Returns nullptr if the state could not be created or the
 // configuration could not be found or loaded.
 LuaState load_user_configs();
-
-#endif
