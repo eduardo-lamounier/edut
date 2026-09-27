@@ -79,10 +79,10 @@ subcommands, positional arguments, and flags:
 ```sh
 edut example --help
 edut example greet
-edut example greet Eduardo --greeting=Hi --upper
+edut example greet Someone --greeting=Hi --upper
 ```
 
-The greetings print `Hello, world!` and `HI, EDUARDO!`. Edit or replace the example
+The greetings print `Hello, world!` and `HI, SOMEONE!`. Edit or replace the example
 module with your own commands and list your modules in `init.lua`.
 
 ## Built-in options
