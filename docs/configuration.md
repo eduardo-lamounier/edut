@@ -11,6 +11,8 @@ to access the API, then pass your commands to `api.setup` as shown in the
 Each command uses its first array element as its name and requires an `execute`
 function. It can also contain `flags` and `subcommands` tables.
 
+The top-level `execute` callback receives its parsed arguments as `input`.
+Subcommand callbacks receive the input that their parent passes to `execute`.
 Use dot syntax for input functions, such as `input.get_argument(1)`.
 Argument indices start at one. `input.get_argument(index)` reads a positional
 argument; `input.get_argument(flag, index)` reads a flag's argument.
@@ -37,9 +39,11 @@ execute = function(input)
 end
 ```
 
-`get_subcommand()` returns `nil` when no subcommand was selected.
-`for_subcommand()` returns its input, and `subcommand.get_name()` returns its
-name. Parsing a subcommand does not automatically execute it.
+`get_subcommand()` returns the selected subcommand's callable wrapper, or `nil`
+when none was selected. `for_subcommand()` returns that subcommand's parsed
+arguments, or `nil` when none was selected. Pass those arguments to
+`subcommand.execute()` as shown above; parsing does not automatically execute
+the subcommand. `subcommand.get_name()` returns its name.
 
 ## Flag arguments
 

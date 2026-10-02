@@ -20,6 +20,7 @@ struct ParsedCommand {
 
   std::unique_ptr<ParsedCommand> subcommand;
 
+  // Returns the first occurrence of a flag, or nullptr if absent.
   const ParsedFlag *find_flag(std::string_view name) const;
 };
 

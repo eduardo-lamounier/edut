@@ -22,8 +22,8 @@ The main components are:
 * `config/`: bundled example configuration.
 * `tests/test_cli.py`: CLI regression tests.
 
-Command storage must remain stable while parsed input or Lua wrappers reference
-it. Registration ownership belongs in `lua_api.cpp`.
+Command and flag storage must remain stable while parsed commands or Lua wrappers
+reference it. Registration ownership belongs in `lua_api.cpp`.
 
 ## Important behavior
 

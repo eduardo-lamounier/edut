@@ -68,8 +68,8 @@ nearby code and comment style; Lua formatting settings are in
 `config/.stylua.toml`.
 
 When changing the C++/Lua boundary, check stack balance, registry references,
-pointer lifetimes, and argument bounds. Keep command storage stable while parsed
-input or Lua wrappers refer to it. Update the sample configuration and user guide
-when changing the Lua API.
+pointer lifetimes, and argument bounds. Keep command and flag storage stable while
+parsed commands or Lua wrappers refer to it. Update the sample configuration and
+user guide when changing the Lua API.
 
 See [known issues](known-issues.md) for remaining bugs and unfinished features.
