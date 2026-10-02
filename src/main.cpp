@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
   // Declared before the Lua state so the input is freed after it.
   // Lua finalizers may still use the input while the state is closing.
-  std::unique_ptr<ParsedInput> parsed_input;
+  std::unique_ptr<ParsedCommand> parsed_command;
   LuaState state = load_user_configs();
   lua_State *L = state.get();
   if(state == nullptr)
@@ -51,17 +51,17 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  std::span<Command> commands = get_registered_commands();
+  std::span<const Command> commands = get_registered_commands();
   Parser parser(commands);
 
-  parsed_input = parser.parse_input(args);
+  parsed_command = parser.parse_input(args);
 
-  if(parsed_input == nullptr) {
+  if(parsed_command == nullptr) {
     report_error("Error when parsing the input.");
     return EXIT_FAILURE;
   }
 
-  bool success = command_execute(L, parsed_input.get());
+  bool success = command_execute(L, parsed_command.get());
 
   return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }

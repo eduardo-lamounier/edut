@@ -5,20 +5,20 @@
 #include "parser.hpp"
 
 // Searches for a command with a specific name.
-static Command *find_command(std::span<Command> commands, const std::string& name) {
-  for(Command& command : commands)
+static const Command *find_command(std::span<const Command> commands, const std::string& name) {
+  for(const Command& command : commands)
     if(command.name == name)
       return &command;
 
   return NULL;
 }
 
-// Searches for a flag in the parsed input.
+// Searches for a flag in the parsed command.
 //
 // Returns the first occurrence, or nullptr if it is not found.
-const ParsedFlag *ParsedInput::find_flag(std::string_view name) const {
+const ParsedFlag *ParsedCommand::find_flag(std::string_view name) const {
   for(const ParsedFlag& parsed_flag : flags)
-    if(parsed_flag.flag.text == name) return &parsed_flag;
+    if(parsed_flag.flag->text == name) return &parsed_flag;
 
   return nullptr;
 }
@@ -50,36 +50,36 @@ static std::optional<FlagMatch> find_input_flag(const Command& command,
   return std::nullopt;
 }
 
-static bool missing_flag_arguments(ParsedInput *input) {
+static bool missing_flag_arguments(const ParsedCommand *input) {
   if(input->flags.empty()) return false;
   const ParsedFlag& last_flag = input->flags.back();
-  return last_flag.arguments.size() < last_flag.flag.arguments_amount;
+  return last_flag.arguments.size() < last_flag.flag->arguments_amount;
 }
 
 // Parses the user input
 //
 // Returns nullptr for parsing errors
-std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> args) {
+std::unique_ptr<ParsedCommand> Parser::parse_input(std::span<const std::string> args) {
   if(args.empty()) return nullptr;
-  Command *command = find_command(commands, args.front());
+  const Command *command = find_command(commands, args.front());
   if(command == NULL) return nullptr;
 
-  std::unique_ptr<ParsedInput> parsed_input = std::make_unique<ParsedInput>();
+  std::unique_ptr<ParsedCommand> parsed_command = std::make_unique<ParsedCommand>();
 
-  parsed_input->command = command;
+  parsed_command->command = command;
 
-  // Tracking pointer for the inner-most parsed_input
+  // Tracking pointer for the inner-most parsed command
   // where the subcommands, arguments and flags will be
   // added
-  ParsedInput *current = parsed_input.get();
+  ParsedCommand *current = parsed_command.get();
 
   for(const std::string& arg : args.subspan(1)) {
-    Command *subcommand = find_command(current->command->sub_commands, arg);
+    const Command *subcommand = find_command(current->command->sub_commands, arg);
     std::optional<FlagMatch> flag_match = find_input_flag(*current->command, arg);
 
     if(missing_flag_arguments(current)) {
       if(subcommand != NULL || flag_match.has_value() || arg.starts_with("--")) {
-        std::println("Missing arguments for flag '{}'.", current->flags.back().flag.text);
+        std::println("Missing arguments for flag '{}'.", current->flags.back().flag->text);
         return nullptr;
       }
       current->flags.back().arguments.push_back(arg);
@@ -87,15 +87,15 @@ std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> ar
     }
 
     if(subcommand != NULL) {
-      current->for_subcommand = std::make_unique<ParsedInput>();
+      current->subcommand = std::make_unique<ParsedCommand>();
 
-      current = current->for_subcommand.get();
+      current = current->subcommand.get();
       current->command = subcommand;
       continue;
     }
 
     if(flag_match.has_value()) {
-      current->flags.push_back({current->command->flags[flag_match->index], {}});
+      current->flags.push_back({&current->command->flags[flag_match->index], {}});
       if(flag_match->inline_value.has_value()) {
         current->flags.back().arguments.push_back(*flag_match->inline_value);
       }
@@ -113,9 +113,9 @@ std::unique_ptr<ParsedInput> Parser::parse_input(std::span<const std::string> ar
 
   if(missing_flag_arguments(current)) {
     std::println("Missing arguments for flag '{}'.",
-                 current->flags.back().flag.text);
+                 current->flags.back().flag->text);
     return nullptr;
   }
 
-  return parsed_input;
+  return parsed_command;
 }

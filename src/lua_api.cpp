@@ -12,18 +12,18 @@ extern "C" {
 // Points to the current commands, stored in command_trees.
 static std::vector<Command> *commands;
 
-std::span<Command> get_registered_commands() {
+std::span<const Command> get_registered_commands() {
   if(commands == NULL) return {};
   return *commands;
 }
 
-static void push_lua_parsedinput(lua_State *L, ParsedInput *parsed_input);
+static void push_lua_parsedcommand(lua_State *L, ParsedCommand *parsed_command);
 static int l_command_execute(lua_State *L);
 static int l_command_getname(lua_State *L);
-static int l_parsedinput_getsubcommand(lua_State *L);
-static int l_parsedinput_forsubcommand(lua_State *L);
-static int l_parsedinput_containsflag(lua_State *L);
-static int l_parsedinput_getargument(lua_State *L);
+static int l_parsedcommand_getsubcommand(lua_State *L);
+static int l_parsedcommand_forsubcommand(lua_State *L);
+static int l_parsedcommand_containsflag(lua_State *L);
+static int l_parsedcommand_getargument(lua_State *L);
 
 // A trailing '=' does not distinguish flags when parsing attached values.
 static size_t flag_name_length(const std::string& name) {
@@ -178,9 +178,9 @@ int lua_require_api(lua_State *L) {
 }
 
 // Executes a top-level callback and reports an uncaught Lua error.
-bool command_execute(lua_State *L, ParsedInput *parsed_input) {
-  lua_rawgeti(L, LUA_REGISTRYINDEX, parsed_input->command->execute_ref);
-  push_lua_parsedinput(L, parsed_input);
+bool command_execute(lua_State *L, ParsedCommand *parsed_command) {
+  lua_rawgeti(L, LUA_REGISTRYINDEX, parsed_command->command->execute_ref);
+  push_lua_parsedcommand(L, parsed_command);
 
   if(lua_pcall(L, 1, 0, 0) != LUA_OK) {
     const char *message = lua_tostring(L, -1);
@@ -192,14 +192,15 @@ bool command_execute(lua_State *L, ParsedInput *parsed_input) {
 }
 
 // Pushes a command into the lua stack.
-static void push_lua_command(lua_State *L, Command *command) {
+static void push_lua_command(lua_State *L, const Command *command) {
   lua_newtable(L);
 
-  lua_pushlightuserdata(L, command);
+  // Lua light userdata stores void*, but command wrappers only read it.
+  lua_pushlightuserdata(L, const_cast<Command*>(command));
   lua_pushcclosure(L, l_command_execute, 1);
   lua_setfield(L, -2, "execute");
 
-  lua_pushlightuserdata(L, command);
+  lua_pushlightuserdata(L, const_cast<Command*>(command));
   lua_pushcclosure(L, l_command_getname, 1);
   lua_setfield(L, -2, "get_name");
 }
@@ -211,8 +212,8 @@ static void push_lua_command(lua_State *L, Command *command) {
 // The command being executed must ALREADY be in the lua
 // stack.
 static int l_command_execute(lua_State *L) {
-  Command *command =
-    (Command*)lua_touserdata(L, lua_upvalueindex(1));
+  const Command *command =
+    (const Command*)lua_touserdata(L, lua_upvalueindex(1));
 
   // Supply nil when the wrapper is called without an input argument.
   lua_settop(L, 1);
@@ -225,84 +226,84 @@ static int l_command_execute(lua_State *L) {
 
 // Implementation of the framework's 'get_name' function
 static int l_command_getname(lua_State *L) {
-  Command *command =
-    (Command*)lua_touserdata(L, lua_upvalueindex(1));
+  const Command *command =
+    (const Command*)lua_touserdata(L, lua_upvalueindex(1));
 
   lua_pushstring(L, command->name.c_str());
   return 1;
 }
 
-// Pushes a parsed_input to the lua stack
-static void push_lua_parsedinput(lua_State *L, ParsedInput *parsed_input) {
+// Pushes a parsed command to the lua stack
+static void push_lua_parsedcommand(lua_State *L, ParsedCommand *parsed_command) {
   lua_newtable(L);
 
-  lua_pushlightuserdata(L, parsed_input);
-  lua_pushcclosure(L, l_parsedinput_getsubcommand, 1);
+  lua_pushlightuserdata(L, parsed_command);
+  lua_pushcclosure(L, l_parsedcommand_getsubcommand, 1);
   lua_setfield(L, -2, "get_subcommand");
 
-  lua_pushlightuserdata(L, parsed_input);
-  lua_pushcclosure(L, l_parsedinput_forsubcommand, 1);
+  lua_pushlightuserdata(L, parsed_command);
+  lua_pushcclosure(L, l_parsedcommand_forsubcommand, 1);
   lua_setfield(L, -2, "for_subcommand");
 
-  lua_pushlightuserdata(L, parsed_input);
-  lua_pushcclosure(L, l_parsedinput_containsflag, 1);
+  lua_pushlightuserdata(L, parsed_command);
+  lua_pushcclosure(L, l_parsedcommand_containsflag, 1);
   lua_setfield(L, -2, "contains_flag");
 
-  lua_pushlightuserdata(L, parsed_input);
-  lua_pushcclosure(L, l_parsedinput_getargument, 1);
+  lua_pushlightuserdata(L, parsed_command);
+  lua_pushcclosure(L, l_parsedcommand_getargument, 1);
   lua_setfield(L, -2, "get_argument");
 }
 
 // Implementation of the framework's 'get_subcommand' function.
 // It returns the command's subcommand.
-static int l_parsedinput_getsubcommand(lua_State *L) {
-  ParsedInput *parsed_input =
-    (ParsedInput*)lua_touserdata(L, lua_upvalueindex(1));
+static int l_parsedcommand_getsubcommand(lua_State *L) {
+  ParsedCommand *parsed_command =
+    (ParsedCommand*)lua_touserdata(L, lua_upvalueindex(1));
 
-  if(parsed_input->for_subcommand == NULL
-    || parsed_input->for_subcommand->command == NULL) {
+  if(parsed_command->subcommand == NULL
+    || parsed_command->subcommand->command == NULL) {
     lua_pushnil(L);
     return 1;
   }
 
-  Command *subcommand = parsed_input->for_subcommand->command;
+  const Command *subcommand = parsed_command->subcommand->command;
 
   push_lua_command(L, subcommand);
   return 1;
 }
 
 // Implementation of the framework's 'for_subcommand' function.
-// It returns the parsed_input passed to the command's subcommand.
-static int l_parsedinput_forsubcommand(lua_State *L) {
-  ParsedInput *parsed_input =
-    (ParsedInput*)lua_touserdata(L, lua_upvalueindex(1));
+// It returns the parsed command passed to the command's subcommand.
+static int l_parsedcommand_forsubcommand(lua_State *L) {
+  ParsedCommand *parsed_command =
+    (ParsedCommand*)lua_touserdata(L, lua_upvalueindex(1));
 
-  if(parsed_input == NULL || parsed_input->for_subcommand == NULL) {
+  if(parsed_command == NULL || parsed_command->subcommand == NULL) {
     lua_pushnil(L);
     return 1;
   }
 
-  push_lua_parsedinput(L, parsed_input->for_subcommand.get());
+  push_lua_parsedcommand(L, parsed_command->subcommand.get());
   return 1;
 }
 
 // Implementation of the framework's 'contains_flag' function.
-// It returns whether a flag exists within the parsed_input.
-static int l_parsedinput_containsflag(lua_State *L) {
-  ParsedInput *parsed_input =
-    (ParsedInput*)lua_touserdata(L, lua_upvalueindex(1));
+// It returns whether a flag exists within the parsed command.
+static int l_parsedcommand_containsflag(lua_State *L) {
+  ParsedCommand *parsed_command =
+    (ParsedCommand*)lua_touserdata(L, lua_upvalueindex(1));
 
   const char *flag = luaL_checkstring(L, 1);
 
-  lua_pushboolean(L, parsed_input->find_flag(flag) != nullptr);
+  lua_pushboolean(L, parsed_command->find_flag(flag) != nullptr);
   return 1;
 }
 
 // Implementation of the framework's 'get_argument' function.
-// It returns an argument, specified by index, in the parsed_input.
-static int l_parsedinput_getargument(lua_State *L) {
-  ParsedInput *parsed_input =
-    (ParsedInput*)lua_touserdata(L, lua_upvalueindex(1));
+// It returns an argument, specified by index, in the parsed command.
+static int l_parsedcommand_getargument(lua_State *L) {
+  ParsedCommand *parsed_command =
+    (ParsedCommand*)lua_touserdata(L, lua_upvalueindex(1));
 
   const std::vector<std::string> *arguments;
   lua_Integer argument_index;
@@ -311,7 +312,7 @@ static int l_parsedinput_getargument(lua_State *L) {
     // Borrow Lua strings: luaL_error may jump past C++ destructors.
     const char *flag_text = luaL_checkstring(L, 1);
     argument_index = luaL_checkinteger(L, 2);
-    const ParsedFlag *flag = parsed_input->find_flag(flag_text);
+    const ParsedFlag *flag = parsed_command->find_flag(flag_text);
 
     if(flag == nullptr)
       return luaL_error(L, "Unknown flag passed for this command."
@@ -319,7 +320,7 @@ static int l_parsedinput_getargument(lua_State *L) {
     arguments = &flag->arguments;
   } else if(lua_type(L, 1) == LUA_TNUMBER) {
     argument_index = luaL_checkinteger(L, 1);
-    arguments = &parsed_input->direct_arguments;
+    arguments = &parsed_command->direct_arguments;
   } else
     return luaL_error(L, "Invalid argument passed for function 'get_argument'."
       "\nExpected a string or a number as first parameter.");
