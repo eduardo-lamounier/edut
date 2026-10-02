@@ -172,7 +172,7 @@ static const struct luaL_Reg edut_api [] = {
 // Implementation of 'require("edut")'
 //
 // Returns the defined API
-int lua_require_api(lua_State *L) {
+int l_require_api(lua_State *L) {
   luaL_newlib(L, edut_api);
   return 1;
 }

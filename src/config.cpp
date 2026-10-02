@@ -55,7 +55,7 @@ LuaState load_user_configs() {
   lua_getglobal(L, "package");
 
   lua_getfield(L, -1, "preload");
-  lua_pushcfunction(L, lua_require_api);
+  lua_pushcfunction(L, l_require_api);
   lua_setfield(L, -2, "edut");
 
   lua_pop(L, 1);
