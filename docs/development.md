@@ -70,6 +70,6 @@ nearby code and comment style; Lua formatting settings are in
 When changing the C++/Lua boundary, check stack balance, registry references,
 pointer lifetimes, and argument bounds. Keep command and flag storage stable while
 parsed commands or Lua wrappers refer to it. Update the sample configuration and
-user guide when changing the Lua API.
+user guide and [Lua API reference](api.md) when changing the Lua API.
 
 See [known issues](known-issues.md) for remaining bugs and unfinished features.

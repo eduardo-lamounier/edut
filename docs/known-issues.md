@@ -33,8 +33,9 @@ use automatic string storage.
 
 ## Documentation and verification
 
-The [configuration guide](configuration.md) covers basic command definitions,
-input lookup, dispatch, and errors. A complete Lua API reference is still needed.
+The [configuration tutorial](configuration.md) introduces command definitions,
+input lookup, dispatch, and errors. The [Lua API reference](api.md) documents all
+public framework functions, definition tables, and parsing rules.
 The CLI regression suite covers core framework behavior and the sample configuration
 on Unix. Native Windows behavior and the entire Lua API are not covered. Extend
 coverage alongside changes to those areas.

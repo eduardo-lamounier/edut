@@ -4,6 +4,11 @@ Define your own command-line commands in Lua and run them through `edut`.
 You can add arguments, flags, and subcommands, then choose what each command does.
 The sample configuration provides a small example to help you get started.
 
+- **Learning edut?** Follow the [configuration tutorial](docs/configuration.md)
+  from your first command through flags, subcommands, and modules.
+- **Looking up a function?** Open the [Lua API reference](docs/api.md#function-index)
+  for signatures, return values, errors, and examples.
+
 ## Installation
 
 Building from source requires CMake, a compiler supporting C++23, and Lua
@@ -95,7 +100,8 @@ as the first argument; flags after a command name are handled by that command.
 
 ## More documentation
 
-- [Configuration guide](docs/configuration.md): Lua commands, flags, and callbacks.
+- [Configuration tutorial](docs/configuration.md): build commands step by step.
+- [Lua API reference](docs/api.md): function index, definition tables, and parsing rules.
 - [Known issues](docs/known-issues.md): current limitations and unfinished features.
 - [Development guide](docs/development.md): source layout, building, and testing.
 
