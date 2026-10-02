@@ -19,7 +19,7 @@ see the [README](../README.md).
 
 - `src/main.cpp`: built-in options and application startup and shutdown.
 - `src/parser.cpp` and `include/parser.hpp`: argument parsing, command and flag
-  lookup, and parsed input. Parsing does not depend on Lua.
+  lookup, and parsed commands. Parsing does not depend on Lua.
 - `src/lua_api.cpp` and `include/lua_api.hpp`: command registration, Lua wrappers,
   and callback execution.
 - `src/config.cpp` and `include/config.hpp`: configuration discovery and loading.
@@ -30,15 +30,17 @@ see the [README](../README.md).
 ## Ownership and execution
 
 Names and arguments use `std::string`, and collections use vectors.
-`Parser` receives the registered commands and returns a `std::unique_ptr<ParsedInput>`.
-Each parsed input owns its subcommand input and stores each flag with its arguments.
-Pointers to registered commands do not own those commands.
+`Parser` reads the registered commands and returns a `std::unique_ptr<ParsedCommand>`.
+Each parsed command owns its parsed subcommand and argument values. It borrows
+`const` pointers to its registered command and flags; registration trees must
+keep those definitions in place while parsed commands or Lua wrappers use them.
+The Lua methods `get_subcommand()` and `for_subcommand()` keep their existing names.
 
 Registration trees remain alive until process exit so command wrappers retained
 by Lua keep valid pointers. Failed registrations also retain their partial trees;
 only complete registrations become the current command collection.
 
-The Lua state is closed by its smart pointer. Parsed input must remain alive
+The Lua state is closed by its smart pointer. Parsed commands must remain alive
 until after Lua closes, because finalizers can still call input wrappers.
 Lua errors may skip C++ destructors inside callbacks, so avoid placing local
 resource owners across calls that can raise a Lua error. The `api.err` function
