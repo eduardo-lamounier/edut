@@ -14,15 +14,21 @@ EXECUTABLE = Path(sys.argv.pop(1) if len(sys.argv) > 1 else "build/edut").resolv
 CONFIG = r'''
 local api = require "edut"
 local function inspect(input)
-  for index = 1, 10 do
+  local index = 1
+  while true do
     local value = input.get_argument(index)
-    if value then print("arg:" .. index .. ":" .. value) end
+    if value == nil then break end
+    print("arg:" .. index .. ":" .. value)
+    index = index + 1
   end
   for _, name in ipairs({"--output-file=", "--pair", "--many"}) do
     if input.contains_flag(name) then
-      for index = 1, 10 do
+      local index = 1
+      while true do
         local value = input.get_argument(name, index)
-        if value then print(name .. ":" .. index .. ":" .. value) end
+        if value == nil then break end
+        print(name .. ":" .. index .. ":" .. value)
+        index = index + 1
       end
     end
   end
@@ -175,14 +181,16 @@ require "edut".setup {commands = {{"custom",
             with self.subTest(option=option):
                 self.assertIn("custom:" + option, self.run_cli("custom", option))
 
-    def test_no_flags_and_positional_limits(self):
+    def test_many_positional_arguments(self):
         self.run_cli("plain")
         self.run_cli("plain", "value")
         self.run_cli("test", "child", "value")
-        values = [str(i) for i in range(10)]
-        self.assertIn("arg:10:9", self.run_cli("plain", *values))
-        self.run_cli("plain", *values, "overflow", success=False)
-        self.run_cli("test", "child", *values, "overflow", success=False)
+        values = [str(i) for i in range(100)]
+        for command in (("plain",), ("test", "child")):
+            with self.subTest(command=command):
+                lines = self.run_cli(*command, *values).splitlines()
+                for index, value in enumerate(values, 1):
+                    self.assertIn(f"arg:{index}:{value}", lines)
 
     def test_attached_and_separate_values(self):
         for args in (("--output-file=", "a b.txt"), ("--output-file=a b.txt",)):
@@ -244,39 +252,63 @@ require "edut".setup {commands = {{"lookup", flags = {"--switch", ["--value"] = 
         self.run_cli("test", "--many", *map(str, range(10)))
         self.run_cli("test", "--verbose", "--output-file=", "file", "child")
 
-    def test_repeated_flag_limits(self):
-        self.run_cli("test", *(["--verbose"] * 20))
-        self.run_cli("test", *(["--verbose"] * 21), success=False)
+    def test_many_repeated_flags(self):
+        output = self.run_cli("test", *(["--verbose"] * 100),
+                              "--output-file=first", *(["--output-file=later"] * 100))
+        self.assertIn("--output-file=:1:first", output)
+        self.assertNotIn("--output-file=:1:later", output)
 
-    def test_registration_limits(self):
-        for count in (20, 21):
-            self.config.write_text('''
+    def test_many_registered_flags(self):
+        self.config.write_text('''
 local flags = {}
-for i = 1, %d do flags[i] = "--flag" .. i end
-require "edut".setup {commands = {{"limit", flags = flags,
-  execute = function() print("EXECUTED") end}}}
-''' % count)
-            output = self.run_cli("limit", "--flag20", success=count == 20)
-            if count == 21:
-                self.assertIn("Too many flags", output)
+for i = 1, 100 do flags[i] = "--flag" .. i end
+require "edut".setup {commands = {{"many", flags = flags,
+  execute = function(input)
+    for _, flag in ipairs(flags) do assert(input.contains_flag(flag)) end
+    print("EXECUTED")
+  end}}}
+''')
+        self.run_cli("many", *(f"--flag{i}" for i in range(1, 101)))
 
-    def test_subcommand_limits(self):
-        for count in (10, 11):
-            with self.subTest(count=count):
-                self.config.write_text('''
+    def test_many_subcommands(self):
+        self.config.write_text('''
 local children = {}
-for i = 1, %d do
-  children[i] = {"child" .. i, execute = function() print("EXECUTED") end}
+for i = 1, 100 do
+  children[i] = {"child" .. i, execute = function()
+    print("child:" .. i)
+    print("EXECUTED")
+  end}
 end
 require "edut".setup {commands = {{"parent", subcommands = children,
   execute = function(input)
     input.get_subcommand().execute(input.for_subcommand())
   end,
 }}}
-''' % count)
-                output = self.run_cli("parent", "child10", success=count == 10)
-                if count == 11:
-                    self.assertIn("Too many subcommands", output)
+''')
+        for index in (1, 11, 100):
+            with self.subTest(index=index):
+                self.assertIn(f"child:{index}", self.run_cli("parent", f"child{index}"))
+
+    def test_many_top_level_commands(self):
+        self.config.write_text('''
+local commands = {}
+for i = 1, 100 do
+  commands[i] = {"command" .. i, execute = function()
+    print("command:" .. i)
+    print("EXECUTED")
+  end}
+end
+require "edut".setup {commands = commands}
+''')
+        self.assertIn("command:100", self.run_cli("command100"))
+
+    def test_many_flag_values(self):
+        self.config.write_text(CONFIG.replace('["--many"] = 10', '["--many"] = 100'))
+        values = [str(i) for i in range(100)]
+        lines = self.run_cli("test", "--many", *values).splitlines()
+        for index, value in enumerate(values, 1):
+            self.assertIn(f"--many:{index}:{value}", lines)
+        self.run_cli("test", "--many", *values[:-1], success=False)
 
     def test_command_wrappers_survive_repeated_setup(self):
         self.config.write_text('''

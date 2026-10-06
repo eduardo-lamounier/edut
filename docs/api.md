@@ -7,6 +7,13 @@ This page covers every public framework function. All functions use **dot
 syntax**, including functions on input and command wrappers. Indices are
 **one-based**; command-line values are **strings**.
 
+The framework imposes no fixed maximum on the number of commands, subcommands,
+registered flags, flag occurrences, positional arguments, or values per flag.
+Names and values have no framework-defined length limit. Collections grow as
+needed, subject to available resources and operating-system command-line limits.
+A value-taking flag still requires exactly the number of values declared in its
+definition.
+
 ## Function index
 
 | Function | Purpose | Returns |

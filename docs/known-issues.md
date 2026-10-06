@@ -39,7 +39,3 @@ public framework functions, definition tables, and parsing rules.
 The CLI regression suite covers core framework behavior and the sample configuration
 on Unix. Native Windows behavior and the entire Lua API are not covered. Extend
 coverage alongside changes to those areas.
-
-Some regression tests still assume former fixed limits on positional arguments,
-registered flags, repeated flags, and subcommands. These expectations need to be
-updated for the current dynamically sized collections.

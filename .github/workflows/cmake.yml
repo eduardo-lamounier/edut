@@ -18,10 +18,13 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes cmake g++-14 make liblua5.4-dev
+          sudo apt-get install --yes cmake g++-14 make liblua5.4-dev python3
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-14
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Run CLI regression tests
+        run: python3 tests/test_cli.py build/edut
