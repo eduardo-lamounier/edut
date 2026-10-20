@@ -9,7 +9,7 @@ struct Flag {
 };
 
 struct Command {
-  int execute_ref;
+  size_t execute_index = 0;
   std::vector<Flag> flags;
   std::string name;
   std::vector<Command> sub_commands;

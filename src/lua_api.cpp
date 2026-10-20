@@ -1,4 +1,4 @@
-#include<list>
+#include<new>
 #include<print>
 #include<stdio.h>
 #include<stdlib.h>
@@ -8,16 +8,88 @@ extern "C" {
 }
 
 #include "lua_api.hpp"
+#include "config.hpp"
 
-// Points to the current commands, stored in command_trees.
+// Points to the current commands, stored in a Lua-owned registration.
 static std::vector<Command> *commands;
+static lua_State *commands_state;
+static int commands_owner_ref = LUA_NOREF;
+
+struct RegisteredCommands {
+  std::vector<Command> commands;
+  RegisteredCommands *next_to_destroy = nullptr;
+
+  explicit RegisteredCommands(size_t amount) : commands(amount) {}
+};
+
+struct RegisteredCommandsHandle {
+  RegisteredCommands *registration;
+};
+
+static constexpr char REGISTERED_COMMANDS_METATABLE[] = "edut.registered_commands";
+static lua_State *closing_state;
+static RegisteredCommands *deferred_registrations;
+
+static int l_registered_commands_gc(lua_State *L) {
+  auto *handle = static_cast<RegisteredCommandsHandle*>(lua_touserdata(L, 1));
+  RegisteredCommands *registration = handle->registration;
+  handle->registration = nullptr;
+
+  if(registration == nullptr) return 0;
+
+  if(L == closing_state) {
+    registration->next_to_destroy = deferred_registrations;
+    deferred_registrations = registration;
+  } else {
+    delete registration;
+  }
+
+  return 0;
+}
+
+static void ensure_registered_commands_metatable(lua_State *L) {
+  if(luaL_newmetatable(L, REGISTERED_COMMANDS_METATABLE)) {
+    lua_pushcfunction(L, l_registered_commands_gc);
+    lua_setfield(L, -2, "__gc");
+  }
+  lua_pop(L, 1);
+}
+
+void begin_lua_state_close(lua_State *L) {
+  closing_state = L;
+}
+
+void finish_lua_state_close(lua_State *L) {
+  RegisteredCommands *registration = deferred_registrations;
+  while(registration != nullptr) {
+    RegisteredCommands *next = registration->next_to_destroy;
+    delete registration;
+    registration = next;
+  }
+  deferred_registrations = nullptr;
+  closing_state = nullptr;
+
+  if(commands_state == L) {
+    commands = nullptr;
+    commands_owner_ref = LUA_NOREF;
+    commands_state = nullptr;
+  }
+}
+
+void LuaStateDeleter::operator()(lua_State *state) const {
+  if(state == nullptr) return;
+  begin_lua_state_close(state);
+  lua_close(state);
+  finish_lua_state_close(state);
+}
 
 std::span<const Command> get_registered_commands() {
   if(commands == NULL) return {};
   return *commands;
 }
 
-static void push_lua_parsedcommand(lua_State *L, ParsedCommand *parsed_command);
+static void push_lua_parsedcommand(lua_State *L, ParsedCommand *parsed_command,
+                                   int owner_index);
 static int l_command_execute(lua_State *L);
 static int l_command_getname(lua_State *L);
 static int l_parsedcommand_getsubcommand(lua_State *L);
@@ -37,7 +109,8 @@ static size_t flag_name_length(const std::string& name) {
 // 'commands' table - that's going to be registered.
 //
 // The 'commands' table must be ALREADY in the stack.
-static void register_command(lua_State *L, std::vector<Command>& commands, int idx) {
+static void register_command(lua_State *L, std::vector<Command>& commands, int idx,
+                             int owner_index, size_t& execute_index) {
   int stack = lua_gettop(L);
   Command& command = commands[idx];
 
@@ -93,21 +166,21 @@ static void register_command(lua_State *L, std::vector<Command>& commands, int i
     command.sub_commands.resize(subcommands_amount);
 
     for(size_t j = 0; j < command.sub_commands.size(); j++)
-      register_command(L, command.sub_commands, j);
+      register_command(L, command.sub_commands, j, owner_index, execute_index);
   }
   lua_pop(L, 1);
 
   lua_getfield(L, -1, "execute");
   luaL_checktype(L, -1, LUA_TFUNCTION);
 
-  command.execute_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  command.execute_index = ++execute_index;
+  lua_getuservalue(L, owner_index);
+  lua_pushvalue(L, -2);
+  lua_rawseti(L, -2, (lua_Integer)command.execute_index);
+  lua_pop(L, 1);
 
   lua_settop(L, stack);
 }
-
-// Keep every registration tree alive while Lua may retain command wrappers.
-// Storage also survives luaL_error, which can jump out of registration.
-static std::list<std::vector<Command>> command_trees;
 
 // Implementation of the framework's function 'setup'.
 //
@@ -124,14 +197,29 @@ static int l_setup(lua_State *L) {
   size_t new_commands_amount = lua_tointeger(L, -1);
   lua_pop(L, 1);
 
-  command_trees.emplace_back(new_commands_amount);
-  std::vector<Command>& new_commands = command_trees.back();
+  ensure_registered_commands_metatable(L);
 
+  auto *handle = new (lua_newuserdata(L, sizeof(RegisteredCommandsHandle)))
+    RegisteredCommandsHandle{nullptr};
+  luaL_setmetatable(L, REGISTERED_COMMANDS_METATABLE);
+  handle->registration = new RegisteredCommands(new_commands_amount);
+  lua_newtable(L);
+  lua_setuservalue(L, 3);
+
+  size_t execute_index = 0;
+  lua_pushvalue(L, 2);
   for(size_t i = 0; i < new_commands_amount; i++)
-    register_command(L, new_commands, i);
+    register_command(L, handle->registration->commands, i, 3, execute_index);
+  lua_pop(L, 1);
 
   // Lua may catch registration errors with pcall. Publish only complete trees.
-  commands = &new_commands;
+  lua_pushvalue(L, -1);
+  const int new_owner_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  if(commands_state == L && commands_owner_ref >= 0)
+    luaL_unref(L, LUA_REGISTRYINDEX, commands_owner_ref);
+  commands_state = L;
+  commands_owner_ref = new_owner_ref;
+  commands = &handle->registration->commands;
 
   return 0;
 }
@@ -158,7 +246,9 @@ static int l_report(lua_State *L) {
 static int l_err(lua_State *L) {
   const char *msg = luaL_checkstring(L, 1);
   report_error(msg);
+  begin_lua_state_close(L);
   lua_close(L);
+  finish_lua_state_close(L);
   exit(EXIT_FAILURE);
 }
 
@@ -179,8 +269,13 @@ int l_require_api(lua_State *L) {
 
 // Executes a top-level callback and reports an uncaught Lua error.
 bool command_execute(lua_State *L, ParsedCommand *parsed_command) {
-  lua_rawgeti(L, LUA_REGISTRYINDEX, parsed_command->command->execute_ref);
-  push_lua_parsedcommand(L, parsed_command);
+  lua_rawgeti(L, LUA_REGISTRYINDEX, commands_owner_ref);
+  const int owner_index = lua_gettop(L);
+  lua_getuservalue(L, owner_index);
+  lua_rawgeti(L, -1, (lua_Integer)parsed_command->command->execute_index);
+  lua_remove(L, -2);
+  push_lua_parsedcommand(L, parsed_command, owner_index);
+  lua_remove(L, owner_index);
 
   if(lua_pcall(L, 1, 0, 0) != LUA_OK) {
     const char *message = lua_tostring(L, -1);
@@ -192,16 +287,18 @@ bool command_execute(lua_State *L, ParsedCommand *parsed_command) {
 }
 
 // Pushes a command into the lua stack.
-static void push_lua_command(lua_State *L, const Command *command) {
+static void push_lua_command(lua_State *L, const Command *command, int owner_index) {
   lua_newtable(L);
 
   // Lua light userdata stores void*, but command wrappers only read it.
   lua_pushlightuserdata(L, const_cast<Command*>(command));
-  lua_pushcclosure(L, l_command_execute, 1);
+  lua_pushvalue(L, owner_index);
+  lua_pushcclosure(L, l_command_execute, 2);
   lua_setfield(L, -2, "execute");
 
   lua_pushlightuserdata(L, const_cast<Command*>(command));
-  lua_pushcclosure(L, l_command_getname, 1);
+  lua_pushvalue(L, owner_index);
+  lua_pushcclosure(L, l_command_getname, 2);
   lua_setfield(L, -2, "get_name");
 }
 
@@ -217,7 +314,11 @@ static int l_command_execute(lua_State *L) {
 
   // Supply nil when the wrapper is called without an input argument.
   lua_settop(L, 1);
-  lua_rawgeti(L, LUA_REGISTRYINDEX, command->execute_ref);
+  lua_pushvalue(L, lua_upvalueindex(2));
+  lua_getuservalue(L, -1);
+  lua_rawgeti(L, -1, (lua_Integer)command->execute_index);
+  lua_remove(L, -2);
+  lua_remove(L, -2);
   lua_pushvalue(L, 1);
   // Let errors reach the caller, including an explicit Lua pcall handler.
   lua_call(L, 1, 0);
@@ -234,23 +335,28 @@ static int l_command_getname(lua_State *L) {
 }
 
 // Pushes a parsed command to the lua stack
-static void push_lua_parsedcommand(lua_State *L, ParsedCommand *parsed_command) {
+static void push_lua_parsedcommand(lua_State *L, ParsedCommand *parsed_command,
+                                   int owner_index) {
   lua_newtable(L);
 
   lua_pushlightuserdata(L, parsed_command);
-  lua_pushcclosure(L, l_parsedcommand_getsubcommand, 1);
+  lua_pushvalue(L, owner_index);
+  lua_pushcclosure(L, l_parsedcommand_getsubcommand, 2);
   lua_setfield(L, -2, "get_subcommand");
 
   lua_pushlightuserdata(L, parsed_command);
-  lua_pushcclosure(L, l_parsedcommand_forsubcommand, 1);
+  lua_pushvalue(L, owner_index);
+  lua_pushcclosure(L, l_parsedcommand_forsubcommand, 2);
   lua_setfield(L, -2, "for_subcommand");
 
   lua_pushlightuserdata(L, parsed_command);
-  lua_pushcclosure(L, l_parsedcommand_containsflag, 1);
+  lua_pushvalue(L, owner_index);
+  lua_pushcclosure(L, l_parsedcommand_containsflag, 2);
   lua_setfield(L, -2, "contains_flag");
 
   lua_pushlightuserdata(L, parsed_command);
-  lua_pushcclosure(L, l_parsedcommand_getargument, 1);
+  lua_pushvalue(L, owner_index);
+  lua_pushcclosure(L, l_parsedcommand_getargument, 2);
   lua_setfield(L, -2, "get_argument");
 }
 
@@ -268,7 +374,7 @@ static int l_parsedcommand_getsubcommand(lua_State *L) {
 
   const Command *subcommand = parsed_command->subcommand->command;
 
-  push_lua_command(L, subcommand);
+  push_lua_command(L, subcommand, lua_upvalueindex(2));
   return 1;
 }
 
@@ -283,7 +389,8 @@ static int l_parsedcommand_forsubcommand(lua_State *L) {
     return 1;
   }
 
-  push_lua_parsedcommand(L, parsed_command->subcommand.get());
+  push_lua_parsedcommand(L, parsed_command->subcommand.get(),
+                         lua_upvalueindex(2));
   return 1;
 }
 

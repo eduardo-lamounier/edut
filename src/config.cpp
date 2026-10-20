@@ -29,10 +29,6 @@ static std::optional<std::string> get_user_lua_configs() {
 #endif
 }
 
-void LuaStateDeleter::operator()(lua_State *state) const {
-  lua_close(state);
-}
-
 // Returns the Lua state after the user configs are loaded.
 // The returned smart pointer closes it when destroyed.
 LuaState load_user_configs() {

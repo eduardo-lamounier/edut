@@ -101,6 +101,28 @@ api.setup {commands = {{"parent", subcommands = {{"child",
                                       "--value", "value", success=not fail)
                 self.assertIn("INPUT_FINALIZED", output)
 
+    def test_input_wrappers_survive_finalizers_during_collection(self):
+        self.config.write_text('''
+local api = require "edut"
+local retained = setmetatable({}, {__gc = function(self)
+  assert(self.child.get_name() == "child")
+  print("INPUT_FINALIZED")
+end})
+api.setup {commands = {{"parent", subcommands = {{"child", execute = function() end}},
+  execute = function(input)
+    retained.child = input.get_subcommand()
+    api.setup {commands = {{"replacement", execute = function() end}}}
+    input = nil
+    retained = nil
+    collectgarbage()
+    collectgarbage()
+    print("EXECUTED")
+  end,
+}}}
+''')
+        output = self.run_cli("parent", "child")
+        self.assertIn("INPUT_FINALIZED", output)
+
     def test_callback_errors(self):
         for error in ('error("callback failed")', 'error({detail = "failure"})'):
             with self.subTest(error=error):
@@ -108,6 +130,17 @@ api.setup {commands = {{"parent", subcommands = {{"child",
 require "edut".setup {commands = {{"fail", execute = function() %s end}}}
 ''' % error)
                 self.assertIn("ERROR", self.run_cli("fail", success=False))
+
+    def test_report_and_err_api(self):
+        self.config.write_text('''
+local api = require "edut"
+api.report("reported message")
+api.setup {commands = {{"plain", execute = function() print("EXECUTED") end}}}
+''')
+        self.assertIn("reported message", self.run_cli("plain"))
+
+        self.config.write_text('require "edut".err("fatal message")')
+        self.assertIn("fatal message", self.invoke("plain", success=False))
 
     def test_command_wrapper_without_input(self):
         self.config.write_text('''
@@ -396,6 +429,33 @@ local ok = pcall(require "edut".setup, {commands = {
 assert(not ok)
 ''')
         self.run_cli("partial", success=False)
+
+    def test_replaced_and_failed_registrations_release_callbacks(self):
+        self.config.write_text('''
+local api = require "edut"
+local function callback_with_finalizer(label)
+  local marker = setmetatable({}, {__gc = function() print(label .. "_FINALIZED") end})
+  return function() return marker end
+end
+
+local old_callback = callback_with_finalizer("REPLACED")
+api.setup {commands = {{"old", execute = old_callback}}}
+old_callback = nil
+api.setup {commands = {{"final", execute = function() print("EXECUTED") end}}}
+
+local failed_callback = callback_with_finalizer("FAILED")
+local ok = pcall(api.setup, {commands = {
+  {"partial", execute = failed_callback},
+  {"broken", flags = {["--bad"] = -1}, execute = function() end},
+}})
+failed_callback = nil
+assert(not ok)
+collectgarbage()
+collectgarbage()
+''')
+        output = self.run_cli("final")
+        self.assertIn("REPLACED_FINALIZED", output)
+        self.assertIn("FAILED_FINALIZED", output)
 
 
 class ExampleTests(CliTestCase):

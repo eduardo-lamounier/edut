@@ -20,17 +20,6 @@ load. Literal question marks also conflict with Lua's module-name placeholder.
 Supporting these directory names requires a loader that does not encode the
 literal directory in a Lua search-path template.
 
-### Command allocation lifetime
-
-Command trees are owned by containers and released at normal process exit.
-Calling `setup` repeatedly retains prior trees so command wrappers held by Lua
-remain valid. Failed registration leaves the previously published tree unchanged,
-including when Lua catches the failure with `pcall`, but partial trees are also
-retained until exit. Callback registry references remain until the Lua state is
-closed. Earlier reclamation of replaced and failed registrations still needs a
-lifetime policy that accounts for retained Lua wrappers. Configuration paths now
-use automatic string storage.
-
 ## Documentation and verification
 
 The [configuration tutorial](configuration.md) introduces command definitions,
