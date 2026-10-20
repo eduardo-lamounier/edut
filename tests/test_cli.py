@@ -1,4 +1,4 @@
-"""CLI integration tests: python3 tests/test_cli.py build/edut (Unix)."""
+"""CLI integration tests: python3 tests/test_cli.py build/edut."""
 
 import os
 from pathlib import Path
@@ -51,6 +51,8 @@ class CliTestCase(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.env = dict(os.environ, XDG_CONFIG_HOME=str(self.root), HOME=str(self.root))
+        if os.name == "nt":
+            self.env["LOCALAPPDATA"] = str(self.root)
 
     def invoke(self, *args, success=True):
         result = subprocess.run(
@@ -180,6 +182,8 @@ require "edut".setup {commands = {{"parent", flags = {"--catch"},
         self.run_cli("parent", "--catch", "child")
 
     def test_home_fallback(self):
+        if os.name == "nt":
+            self.skipTest("the HOME fallback applies to Unix")
         home = self.root / "home"
         target = home / ".config" / "edut"
         target.mkdir(parents=True)

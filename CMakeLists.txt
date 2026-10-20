@@ -22,9 +22,8 @@ target_link_libraries( edut PRIVATE
   ${LUA_LIBRARIES}
 )
 
-target_compile_options( edut PRIVATE 
-  -Wall
-  -Wextra
-  -g
-)
-
+if(MSVC)
+  target_compile_options(edut PRIVATE /W4)
+else()
+  target_compile_options(edut PRIVATE -Wall -Wextra)
+endif()

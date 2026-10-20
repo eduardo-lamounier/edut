@@ -39,8 +39,9 @@ export XDG_CONFIG_HOME="$(mktemp -d)"
 mkdir -p "$XDG_CONFIG_HOME/edut"
 ```
 
-The following steps all use the selected directory. Windows support is partial;
-see [platform support](known-issues.md#platform-support).
+On Windows, configuration is loaded from `%LOCALAPPDATA%\edut`. The shell
+commands in this guide use Unix syntax; the Lua configuration works the same way.
+The following steps use the selected configuration directory.
 
 ## Write your first command
 

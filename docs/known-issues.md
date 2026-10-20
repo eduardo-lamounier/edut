@@ -1,21 +1,19 @@
 # Known issues and unfinished features
 
-This document tracks issues identified during the initial codebase review that
-remain unresolved. It is a development backlog, not a guarantee that all other
-behavior has been validated. Remove or update entries as they are addressed.
+This document tracks known limitations that remain unresolved. It is not a
+guarantee that all other behavior has been validated.
 
 ## Platform support
 
-The configuration loader recognizes `LOCALAPPDATA` on Windows, but native Windows
-builds and runtime behavior still need validation. CMake currently passes
-GCC-style compiler options unconditionally.
+The project has a native Windows CI job that builds with MSVC and runs the CLI
+regression suite. Windows behavior outside that suite has not been exhaustively
+validated.
 
-## Documentation and verification
+## Verification coverage
 
 The [configuration tutorial](configuration.md) introduces command definitions,
 input lookup, dispatch, and errors. The [Lua API reference](api.md) documents all
-public framework functions, definition tables, and parsing rules.
-The CLI regression suite covers core framework behavior and the sample
-configuration, including modules loaded from config directories containing Lua
-search-path characters on Unix. Native Windows behavior and every Lua API
-input/error combination are not exhaustively covered.
+public framework functions, definition tables, and parsing rules. The CLI suite
+exercises the public Lua wrappers, the sample configuration, and module loading
+from directories containing Lua search-path characters. It does not exhaustively
+test every documented input and error combination.
