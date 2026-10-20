@@ -192,6 +192,23 @@ require "edut".setup {commands = {{"parent", flags = {"--catch"},
                     self.env["XDG_CONFIG_HOME"] = value
                 self.run_cli("plain")
 
+    def test_config_modules_with_search_path_characters(self):
+        folder_name = "config;with-markers" if os.name == "nt" else "config;with?markers"
+        config_home = self.root / folder_name
+        config = config_home / "edut"
+        module = config / "lua" / "nested" / "greeting.lua"
+        module.parent.mkdir(parents=True)
+        module.write_text('return {{"from-module", execute = function() print("MODULE_LOADED"); print("EXECUTED") end}}')
+        (config / "init.lua").write_text('''
+local api = require "edut"
+api.setup {commands = require "nested.greeting"}
+''')
+        if os.name == "nt":
+            self.env["LOCALAPPDATA"] = str(config_home)
+        else:
+            self.env["XDG_CONFIG_HOME"] = str(config_home)
+        self.assertIn("MODULE_LOADED", self.run_cli("from-module"))
+
     def test_builtin_flags_skip_configuration(self):
         self.config.write_text('error("configuration must not load")')
         for option in ("--help", "-h", "--version", "-v"):
