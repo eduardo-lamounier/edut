@@ -28,3 +28,24 @@ jobs:
 
       - name: Run CLI regression tests
         run: python3 tests/test_cli.py build/edut
+
+  windows-build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Lua
+        run: vcpkg install lua:x64-windows
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run CLI regression tests
+        run: python tests/test_cli.py build/Release/edut.exe

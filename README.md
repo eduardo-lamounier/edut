@@ -21,13 +21,13 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-On Unix, the executable is generated at `build/edut`. You can run it from there,
-or copy it to a directory in your `PATH` to use `edut` from any directory.
+On Unix, the executable is generated at `build/edut`; on Windows with the
+Visual Studio generator, it is at `build/Release/edut.exe`. You can run it from
+there or copy it to a directory in your `PATH` to use `edut` from any directory.
 The examples below assume it is in your `PATH`.
 
-Windows support is partial. The configuration loader recognizes
-`%LOCALAPPDATA%/edut`; native Windows builds still need validation.
-See [platform limitations](docs/known-issues.md#platform-support).
+On Windows, `edut` reads configuration from `%LOCALAPPDATA%/edut`. The native
+MSVC build and CLI regression suite are included in CI.
 
 ## Your first command
 

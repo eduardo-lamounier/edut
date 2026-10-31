@@ -1,4 +1,4 @@
-"""CLI integration tests: python3 tests/test_cli.py build/edut (Unix)."""
+"""CLI integration tests: python3 tests/test_cli.py build/edut."""
 
 import os
 from pathlib import Path
@@ -51,6 +51,8 @@ class CliTestCase(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.env = dict(os.environ, XDG_CONFIG_HOME=str(self.root), HOME=str(self.root))
+        if os.name == "nt":
+            self.env["LOCALAPPDATA"] = str(self.root)
 
     def invoke(self, *args, success=True):
         result = subprocess.run(
@@ -101,6 +103,28 @@ api.setup {commands = {{"parent", subcommands = {{"child",
                                       "--value", "value", success=not fail)
                 self.assertIn("INPUT_FINALIZED", output)
 
+    def test_input_wrappers_survive_finalizers_during_collection(self):
+        self.config.write_text('''
+local api = require "edut"
+local retained = setmetatable({}, {__gc = function(self)
+  assert(self.child.get_name() == "child")
+  print("INPUT_FINALIZED")
+end})
+api.setup {commands = {{"parent", subcommands = {{"child", execute = function() end}},
+  execute = function(input)
+    retained.child = input.get_subcommand()
+    api.setup {commands = {{"replacement", execute = function() end}}}
+    input = nil
+    retained = nil
+    collectgarbage()
+    collectgarbage()
+    print("EXECUTED")
+  end,
+}}}
+''')
+        output = self.run_cli("parent", "child")
+        self.assertIn("INPUT_FINALIZED", output)
+
     def test_callback_errors(self):
         for error in ('error("callback failed")', 'error({detail = "failure"})'):
             with self.subTest(error=error):
@@ -108,6 +132,17 @@ api.setup {commands = {{"parent", subcommands = {{"child",
 require "edut".setup {commands = {{"fail", execute = function() %s end}}}
 ''' % error)
                 self.assertIn("ERROR", self.run_cli("fail", success=False))
+
+    def test_report_and_err_api(self):
+        self.config.write_text('''
+local api = require "edut"
+api.report("reported message")
+api.setup {commands = {{"plain", execute = function() print("EXECUTED") end}}}
+''')
+        self.assertIn("reported message", self.run_cli("plain"))
+
+        self.config.write_text('require "edut".err("fatal message")')
+        self.assertIn("fatal message", self.invoke("plain", success=False))
 
     def test_command_wrapper_without_input(self):
         self.config.write_text('''
@@ -147,6 +182,8 @@ require "edut".setup {commands = {{"parent", flags = {"--catch"},
         self.run_cli("parent", "--catch", "child")
 
     def test_home_fallback(self):
+        if os.name == "nt":
+            self.skipTest("the HOME fallback applies to Unix")
         home = self.root / "home"
         target = home / ".config" / "edut"
         target.mkdir(parents=True)
@@ -158,6 +195,23 @@ require "edut".setup {commands = {{"parent", flags = {"--catch"},
                 if value is not None:
                     self.env["XDG_CONFIG_HOME"] = value
                 self.run_cli("plain")
+
+    def test_config_modules_with_search_path_characters(self):
+        folder_name = "config;with-markers" if os.name == "nt" else "config;with?markers"
+        config_home = self.root / folder_name
+        config = config_home / "edut"
+        module = config / "lua" / "nested" / "greeting.lua"
+        module.parent.mkdir(parents=True)
+        module.write_text('return {{"from-module", execute = function() print("MODULE_LOADED"); print("EXECUTED") end}}')
+        (config / "init.lua").write_text('''
+local api = require "edut"
+api.setup {commands = require "nested.greeting"}
+''')
+        if os.name == "nt":
+            self.env["LOCALAPPDATA"] = str(config_home)
+        else:
+            self.env["XDG_CONFIG_HOME"] = str(config_home)
+        self.assertIn("MODULE_LOADED", self.run_cli("from-module"))
 
     def test_builtin_flags_skip_configuration(self):
         self.config.write_text('error("configuration must not load")')
@@ -396,6 +450,33 @@ local ok = pcall(require "edut".setup, {commands = {
 assert(not ok)
 ''')
         self.run_cli("partial", success=False)
+
+    def test_replaced_and_failed_registrations_release_callbacks(self):
+        self.config.write_text('''
+local api = require "edut"
+local function callback_with_finalizer(label)
+  local marker = setmetatable({}, {__gc = function() print(label .. "_FINALIZED") end})
+  return function() return marker end
+end
+
+local old_callback = callback_with_finalizer("REPLACED")
+api.setup {commands = {{"old", execute = old_callback}}}
+old_callback = nil
+api.setup {commands = {{"final", execute = function() print("EXECUTED") end}}}
+
+local failed_callback = callback_with_finalizer("FAILED")
+local ok = pcall(api.setup, {commands = {
+  {"partial", execute = failed_callback},
+  {"broken", flags = {["--bad"] = -1}, execute = function() end},
+}})
+failed_callback = nil
+assert(not ok)
+collectgarbage()
+collectgarbage()
+''')
+        output = self.run_cli("final")
+        self.assertIn("REPLACED_FINALIZED", output)
+        self.assertIn("FAILED_FINALIZED", output)
 
 
 class ExampleTests(CliTestCase):

@@ -36,9 +36,12 @@ Each parsed command owns its parsed subcommand and argument values. It borrows
 keep those definitions in place while parsed commands or Lua wrappers use them.
 The Lua methods `get_subcommand()` and `for_subcommand()` keep their existing names.
 
-Registration trees remain alive until process exit so command wrappers retained
-by Lua keep valid pointers. Failed registrations also retain their partial trees;
-only complete registrations become the current command collection.
+Each registration is owned by Lua userdata. The current registration is anchored
+in the Lua registry, and command and input wrappers retain its userdata while they
+refer to that registration. Replacing a registration releases the previous tree
+when no wrappers retain it. Failed registrations release their callback references
+when Lua collects their userdata. During Lua shutdown, tree destruction is deferred
+until finalizers have finished using their wrappers.
 
 The Lua state is closed by its smart pointer. Parsed commands must remain alive
 until after Lua closes, because finalizers can still call input wrappers.

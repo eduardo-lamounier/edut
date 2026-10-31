@@ -115,6 +115,8 @@ Registers the commands in `options.commands`. Returns no values.
 - Invalid definitions, such as a missing callback, invalid flag value count, or
   ambiguous flag names, raise a Lua error. A failed registration leaves the
   previously registered commands active if the error is caught.
+- Replaced registrations remain available to Lua wrappers that still refer to
+  them and are released after those wrappers become unreachable.
 
 ```lua
 local api = require "edut"
