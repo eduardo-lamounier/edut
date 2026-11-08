@@ -31,12 +31,38 @@ jobs:
 
   windows-build-and-test:
     runs-on: windows-latest
+    env:
+      VCPKG_DOWNLOADS: ${{ github.workspace }}\vcpkg-downloads
 
     steps:
       - uses: actions/checkout@v6
 
+      - name: Prepare vcpkg downloads directory
+        run: New-Item -ItemType Directory -Force -Path $env:VCPKG_DOWNLOADS | Out-Null
+
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DOWNLOADS }}
+          key: vcpkg-downloads-windows-lua-5.5.1-v1
+          restore-keys: vcpkg-downloads-windows-
+
       - name: Install Lua
-        run: vcpkg install lua:x64-windows
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            vcpkg install lua:x64-windows
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            if ($attempt -lt 3) {
+              Write-Host "vcpkg failed; retrying in $($attempt * 10) seconds..."
+              Start-Sleep -Seconds ($attempt * 10)
+            }
+          }
+
+          exit $LASTEXITCODE
 
       - name: Configure
         run: >-
